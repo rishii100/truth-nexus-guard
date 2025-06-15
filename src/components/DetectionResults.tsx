@@ -523,7 +523,6 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
           
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ... keep existing code for detailed info panels ... */}
               <div className="bg-white p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Technical Details</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
@@ -550,7 +549,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
                 className="flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Download Report
+                Download JSON Report
               </button>
             </div>
           </div>
