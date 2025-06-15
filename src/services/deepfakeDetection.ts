@@ -31,29 +31,33 @@ export const analyzeFile = async (file: File, apiKey: string): Promise<Detection
               {
                 text: `Analyze this ${file.type.startsWith('image') ? 'image' : file.type.startsWith('video') ? 'video' : 'audio'} for potential deepfake manipulation. 
                 
-                You are a deepfake detection specialist. Provide a balanced analysis that can distinguish between real and synthetic content.
+                You are a deepfake detection specialist. Be balanced and precise in your analysis. Consider that MOST photos are real and natural.
                 
-                Look for these specific deepfake indicators:
-                1. Unnatural facial blending or warping around edges
-                2. Inconsistent lighting that doesn't match the environment
-                3. Strange artifacts around eyes, teeth, or hair boundaries
-                4. Pixelation or blur inconsistencies
+                Look for these SPECIFIC deepfake indicators:
+                1. Obvious facial blending artifacts or warping around edges
+                2. Severely inconsistent lighting that defies physics
+                3. Clear artifacts around eyes, teeth, or hair boundaries
+                4. Unusual pixelation or blur patterns
                 5. Temporal inconsistencies (for videos)
-                6. Unnatural skin texture (too smooth or too perfect)
+                6. Artificially perfect skin texture (completely unrealistic)
                 
-                However, also consider that real photos can have:
-                - Natural imperfections and lighting variations
-                - Camera artifacts or compression
-                - Normal photo editing or filters
-                - Natural shadows and reflections
+                However, remember that AUTHENTIC photos often have:
+                - Natural imperfections and normal lighting variations
+                - Camera artifacts, compression, or normal photo editing
+                - Natural filters, makeup, or good photography techniques
+                - Normal shadows, reflections, and environmental factors
+                - Natural skin texture with some editing/smoothing
                 
-                IMPORTANT: Respond with a confidence score from 0-100 where:
-                - 0-40: Strong evidence of deepfake/AI generation
-                - 41-60: Moderate suspicion of manipulation
-                - 61-80: Minor concerns but likely authentic
-                - 81-100: High confidence in authenticity
+                IMPORTANT: Use this confidence scale (0-100):
+                - 85-100: Clearly authentic with natural characteristics
+                - 70-84: Likely authentic with minor concerns
+                - 50-69: Uncertain, needs further analysis
+                - 30-49: Suspicious with notable artificial elements
+                - 0-29: Strong evidence of AI generation/deepfake
                 
-                Start your response with "CONFIDENCE_SCORE: [number]" then provide detailed analysis focusing on specific technical indicators rather than general impressions.`
+                BIAS TOWARD AUTHENTICITY unless you see CLEAR deepfake indicators.
+                
+                Respond with "CONFIDENCE_SCORE: [number]" followed by technical analysis focusing on specific evidence rather than assumptions.`
               },
               {
                 inline_data: {
@@ -82,13 +86,13 @@ export const analyzeFile = async (file: File, apiKey: string): Promise<Detection
     
     return {
       confidence: analysis.confidence,
-      isDeepfake: analysis.confidence < 60, // More balanced threshold - only flag if confidence is below 60%
+      isDeepfake: analysis.confidence < 50, // Only flag as deepfake if confidence is below 50%
       processingTime,
       analysis: {
-        spatial: { score: analysis.spatial, status: analysis.spatial > 60 ? 'authentic' : 'suspicious' },
-        temporal: { score: analysis.temporal, status: analysis.temporal > 60 ? 'authentic' : 'suspicious' },
-        audio: { score: analysis.audio, status: analysis.audio > 60 ? 'authentic' : 'suspicious' },
-        metadata: { score: analysis.metadata, status: analysis.metadata > 60 ? 'authentic' : 'suspicious' }
+        spatial: { score: analysis.spatial, status: analysis.spatial > 50 ? 'authentic' : 'suspicious' },
+        temporal: { score: analysis.temporal, status: analysis.temporal > 50 ? 'authentic' : 'suspicious' },
+        audio: { score: analysis.audio, status: analysis.audio > 50 ? 'authentic' : 'suspicious' },
+        metadata: { score: analysis.metadata, status: analysis.metadata > 50 ? 'authentic' : 'suspicious' }
       },
       explanation: aiResponse
     };
@@ -114,21 +118,21 @@ const parseAIResponse = (response: string) => {
                          response.match(/confidence[:\s]*(\d+)/i) ||
                          response.match(/(\d+)(?:%|\s*confidence|\s*score)/i);
   
-  let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 70; // Default to neutral if unclear
+  let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 75; // Default to optimistic if unclear
   
-  // More balanced keyword analysis
+  // More precise keyword analysis with proper weighting
   const strongDeepfakeKeywords = [
-    'deepfake', 'ai-generated', 'synthetic', 'artificial', 'generated', 
-    'manipulation', 'warping', 'blending artifacts', 'unnatural transitions'
+    'artificial', 'generated', 'synthetic', 'deepfake', 'ai-generated',
+    'obvious manipulation', 'clear artifacts', 'severe inconsistencies'
   ];
   
   const moderateDeepfakeKeywords = [
-    'suspicious', 'inconsistent', 'artifacts', 'pixelation', 'too perfect'
+    'suspicious', 'unusual', 'artifacts', 'inconsistent', 'unnatural'
   ];
   
   const authenticityKeywords = [
     'authentic', 'genuine', 'real', 'natural', 'consistent', 'legitimate',
-    'normal', 'typical', 'realistic'
+    'normal', 'typical', 'realistic', 'standard', 'expected', 'common'
   ];
   
   const lowerResponse = response.toLowerCase();
@@ -137,31 +141,33 @@ const parseAIResponse = (response: string) => {
   const moderateCount = moderateDeepfakeKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
   const authenticCount = authenticityKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
   
-  // Adjust confidence more thoughtfully
-  if (strongCount > 2) {
-    confidence = Math.min(confidence, 40); // Strong evidence of deepfake
-  } else if (strongCount > 0 || moderateCount > 3) {
-    confidence = Math.min(confidence, 55); // Moderate suspicion
+  // More balanced adjustment logic
+  if (strongCount >= 2) {
+    confidence = Math.min(confidence, 35); // Strong evidence of deepfake
+  } else if (strongCount >= 1) {
+    confidence = Math.min(confidence, 45); // Some evidence of deepfake
+  } else if (moderateCount > 3 && authenticCount <= 1) {
+    confidence = Math.min(confidence, 55); // Multiple concerns with little positive evidence
   } else if (authenticCount > moderateCount + strongCount) {
-    confidence = Math.max(confidence, 75); // Boost if clearly authentic indicators
+    confidence = Math.max(confidence, 80); // Clear authentic indicators
+  } else if (authenticCount >= 2 && strongCount === 0) {
+    confidence = Math.max(confidence, 70); // Good authentic indicators, no strong concerns
   }
   
-  // Don't be overly conservative with high scores
-  if (confidence > 85 && strongCount === 0 && moderateCount <= 1) {
-    confidence = Math.min(confidence, 90); // Cap but don't be too harsh
-  }
+  // Ensure reasonable bounds
+  confidence = Math.max(10, Math.min(95, confidence));
   
   console.log('Parsed confidence:', confidence, 'Strong indicators:', strongCount, 'Moderate indicators:', moderateCount, 'Authentic indicators:', authenticCount);
   
-  // Generate sub-scores based on confidence with some variance
+  // Generate sub-scores based on confidence with less variance
   const baseScore = confidence;
-  const variance = 10; // Reduced variance for more stability
+  const variance = 8; // Reduced variance for stability
   
   return {
     confidence,
-    spatial: Math.max(0, Math.min(100, baseScore + (Math.random() - 0.5) * variance)),
-    temporal: Math.max(0, Math.min(100, baseScore + (Math.random() - 0.5) * variance)),
-    audio: Math.max(0, Math.min(100, baseScore + (Math.random() - 0.5) * variance)),
-    metadata: Math.max(0, Math.min(100, baseScore + (Math.random() - 0.5) * variance))
+    spatial: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    temporal: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    audio: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    metadata: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
   };
 };

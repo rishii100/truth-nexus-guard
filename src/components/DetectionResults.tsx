@@ -1,4 +1,3 @@
-
 import { CheckCircle, AlertTriangle, Info, Eye, Clock, FileText, Download } from "lucide-react";
 import { useState } from "react";
 
@@ -78,6 +77,18 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const cleanExplanationText = (text: string) => {
+    return text
+      .replace(/\*\*/g, '') // Remove ** symbols
+      .replace(/\*/g, '') // Remove * symbols
+      .replace(/#{1,6}\s*/g, '') // Remove markdown headers
+      .replace(/`{1,3}/g, '') // Remove code blocks
+      .replace(/CONFIDENCE_SCORE:\s*\d+/i, '') // Remove confidence score line
+      .replace(/^\s*[-•]\s*/gm, '') // Remove bullet points
+      .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
+      .trim();
+  };
+
   if (!result) {
     return (
       <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -147,7 +158,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
         ))}
       </div>
 
-      {/* Elegant AI Explanation */}
+      {/* Clean AI Explanation */}
       <div className="relative mb-6 overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5"></div>
         <div className="relative p-6">
@@ -165,8 +176,8 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
                 <div className="h-1 flex-1 bg-gradient-to-r from-blue-200 to-purple-200 rounded-full"></div>
               </div>
               <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed font-medium text-base m-0">
-                  {result.explanation || "Detailed analysis completed using multimodal AI detection algorithms."}
+                <p className="text-gray-700 leading-relaxed font-medium text-base m-0 whitespace-pre-line">
+                  {cleanExplanationText(result.explanation) || "Detailed analysis completed using multimodal AI detection algorithms."}
                 </p>
               </div>
             </div>
