@@ -31,14 +31,23 @@ export const analyzeFile = async (file: File, apiKey: string): Promise<Detection
               {
                 text: `Analyze this ${file.type.startsWith('image') ? 'image' : file.type.startsWith('video') ? 'video' : 'audio'} for potential deepfake manipulation. 
                 
-                Please provide a detailed analysis considering:
-                1. Visual artifacts and inconsistencies
-                2. Temporal consistency (for video)
-                3. Audio-visual synchronization (for video with audio)
-                4. Metadata anomalies
+                You are a specialized deepfake detection AI. Be VERY critical and suspicious of any content that could potentially be AI-generated or manipulated.
                 
-                Respond with a confidence score (0-100) and detailed explanation of your findings.
-                Focus on technical indicators of manipulation.`
+                Look carefully for:
+                1. Unnatural facial features, skin texture, or lighting inconsistencies
+                2. Artifacts around eyes, mouth, or face boundaries
+                3. Inconsistent lighting or shadows
+                4. Unusual blending or pixelation
+                5. Signs of AI generation (too perfect, unnatural smoothness)
+                
+                IMPORTANT: Respond with a confidence score from 0-100 where:
+                - 0-30: Definitely a deepfake/AI generated
+                - 31-60: Likely a deepfake/AI generated  
+                - 61-80: Possibly manipulated
+                - 81-100: Appears authentic
+                
+                Start your response with "CONFIDENCE_SCORE: [number]" then provide detailed analysis.
+                Be strict and err on the side of caution - modern AI can create very realistic content.`
               },
               {
                 inline_data: {
@@ -60,19 +69,20 @@ export const analyzeFile = async (file: File, apiKey: string): Promise<Detection
     }
 
     const aiResponse = data.candidates[0]?.content?.parts[0]?.text || '';
+    console.log('AI Response:', aiResponse);
     
     // Parse AI response to extract confidence and analysis
     const analysis = parseAIResponse(aiResponse);
     
     return {
       confidence: analysis.confidence,
-      isDeepfake: analysis.confidence < 70, // Consider <70% confidence as potential deepfake
+      isDeepfake: analysis.confidence < 80, // More strict threshold - anything below 80% is suspicious
       processingTime,
       analysis: {
-        spatial: { score: analysis.spatial, status: analysis.spatial > 80 ? 'authentic' : 'suspicious' },
-        temporal: { score: analysis.temporal, status: analysis.temporal > 80 ? 'authentic' : 'suspicious' },
-        audio: { score: analysis.audio, status: analysis.audio > 80 ? 'authentic' : 'suspicious' },
-        metadata: { score: analysis.metadata, status: analysis.metadata > 80 ? 'authentic' : 'suspicious' }
+        spatial: { score: analysis.spatial, status: analysis.spatial > 70 ? 'authentic' : 'suspicious' },
+        temporal: { score: analysis.temporal, status: analysis.temporal > 70 ? 'authentic' : 'suspicious' },
+        audio: { score: analysis.audio, status: analysis.audio > 70 ? 'authentic' : 'suspicious' },
+        metadata: { score: analysis.metadata, status: analysis.metadata > 70 ? 'authentic' : 'suspicious' }
       },
       explanation: aiResponse
     };
@@ -93,13 +103,43 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const parseAIResponse = (response: string) => {
-  // Extract confidence score from AI response
-  const confidenceMatch = response.match(/confidence[:\s]*(\d+)/i);
-  const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : Math.floor(Math.random() * 40 + 60); // Fallback random score
+  // Look for the confidence score in the AI response
+  const confidenceMatch = response.match(/CONFIDENCE_SCORE:\s*(\d+)/i) || 
+                         response.match(/confidence[:\s]*(\d+)/i) ||
+                         response.match(/(\d+)(?:%|\s*confidence|\s*score)/i);
   
-  // Generate realistic sub-scores based on confidence
+  let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50; // Default to suspicious if unclear
+  
+  // Additional checks for deepfake indicators in the response text
+  const suspiciousKeywords = [
+    'artificial', 'ai-generated', 'synthetic', 'deepfake', 'manipulated', 
+    'generated', 'fake', 'suspicious', 'artifacts', 'inconsistent',
+    'unnatural', 'blending', 'pixelation', 'manipulation'
+  ];
+  
+  const positiveKeywords = [
+    'authentic', 'genuine', 'real', 'natural', 'consistent', 'legitimate'
+  ];
+  
+  const lowerResponse = response.toLowerCase();
+  const suspiciousCount = suspiciousKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
+  const positiveCount = positiveKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
+  
+  // Adjust confidence based on keyword analysis
+  if (suspiciousCount > positiveCount + 1) {
+    confidence = Math.min(confidence, 60); // Cap at 60% if many suspicious indicators
+  }
+  
+  // If the AI response mentions it appears authentic but we want to be more critical
+  if (confidence > 90 && suspiciousCount === 0) {
+    confidence = Math.min(confidence, 85); // Be more conservative
+  }
+  
+  console.log('Parsed confidence:', confidence, 'Suspicious keywords:', suspiciousCount, 'Positive keywords:', positiveCount);
+  
+  // Generate sub-scores based on confidence with some variance
   const baseScore = confidence;
-  const variance = 10;
+  const variance = 15;
   
   return {
     confidence,
