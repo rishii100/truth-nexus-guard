@@ -36,7 +36,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     item.confidence === result.confidence && 
     item.processingTime === result.processingTime
   )) {
-    const newEntry = {
+    const entry = {
       id: Date.now(),
       filename: "uploaded_file",
       date: new Date().toISOString().split('T')[0],
@@ -44,8 +44,39 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
       isDeepfake: result.isDeepfake,
       processingTime: result.processingTime
     };
-    analysisHistory = [newEntry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
+    analysisHistory = [entry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
   }
+
+  const downloadReport = () => {
+    if (!result) return;
+    
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      confidence: result.confidence,
+      isDeepfake: result.isDeepfake,
+      processingTime: result.processingTime,
+      analysis: result.analysis,
+      explanation: result.explanation,
+      technicalDetails: {
+        modelVersion: "v2.1.4",
+        algorithm: "Multi-modal CNN",
+        qualityScore: Math.round(result.confidence * 0.9),
+        riskLevel: result.isDeepfake ? 'High' : 'Low',
+        manipulationProbability: (100 - result.confidence).toFixed(1) + '%',
+        recommendation: result.isDeepfake ? 'Further Investigation' : 'Content Verified'
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deepfake-analysis-report-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   if (!result) {
     return (
@@ -127,14 +158,14 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <h4 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   AI Analysis Insights
                 </h4>
                 <div className="h-1 flex-1 bg-gradient-to-r from-blue-200 to-purple-200 rounded-full"></div>
               </div>
               <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap font-medium">
+                <p className="text-gray-700 leading-relaxed font-medium text-base">
                   {result.explanation || "Detailed analysis completed using multimodal AI detection algorithms."}
                 </p>
               </div>
@@ -179,25 +210,28 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
               <div className="bg-white p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Technical Details</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Model Version: v2.1.4</li>
-                  <li>• Analysis Algorithm: Multi-modal CNN</li>
-                  <li>• Processing Time: {result.processingTime}ms</li>
-                  <li>• Quality Score: {Math.round(result.confidence * 0.9)}%</li>
+                  <li>Model Version: v2.1.4</li>
+                  <li>Analysis Algorithm: Multi-modal CNN</li>
+                  <li>Processing Time: {result.processingTime}ms</li>
+                  <li>Quality Score: {Math.round(result.confidence * 0.9)}%</li>
                 </ul>
               </div>
               <div className="bg-white p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Risk Assessment</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Overall Risk: {result.isDeepfake ? 'High' : 'Low'}</li>
-                  <li>• Manipulation Probability: {(100 - result.confidence).toFixed(1)}%</li>
-                  <li>• Authenticity Score: {result.confidence.toFixed(1)}%</li>
-                  <li>• Recommendation: {result.isDeepfake ? 'Further Investigation' : 'Content Verified'}</li>
+                  <li>Overall Risk: {result.isDeepfake ? 'High' : 'Low'}</li>
+                  <li>Manipulation Probability: {(100 - result.confidence).toFixed(1)}%</li>
+                  <li>Authenticity Score: {result.confidence.toFixed(1)}%</li>
+                  <li>Recommendation: {result.isDeepfake ? 'Further Investigation' : 'Content Verified'}</li>
                 </ul>
               </div>
             </div>
             
             <div className="flex gap-2">
-              <button className="flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors">
+              <button 
+                onClick={downloadReport}
+                className="flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Download Report
               </button>
