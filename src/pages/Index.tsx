@@ -7,6 +7,12 @@ import { useState } from "react";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'detection' | 'results'>('overview');
+  const [detectionResult, setDetectionResult] = useState(null);
+
+  const handleAnalysisComplete = (result: any) => {
+    setDetectionResult(result);
+    setActiveTab('results');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -44,7 +50,7 @@ const Index = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Sample Results
+              Results {detectionResult && <span className="ml-1 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">New</span>}
             </button>
           </nav>
         </div>
@@ -52,8 +58,8 @@ const Index = () => {
         {/* Tab Content */}
         <div className="space-y-8">
           {activeTab === 'overview' && <ProjectOverview />}
-          {activeTab === 'detection' && <FileUpload />}
-          {activeTab === 'results' && <DetectionResults />}
+          {activeTab === 'detection' && <FileUpload onAnalysisComplete={handleAnalysisComplete} />}
+          {activeTab === 'results' && <DetectionResults result={detectionResult} />}
         </div>
       </main>
 

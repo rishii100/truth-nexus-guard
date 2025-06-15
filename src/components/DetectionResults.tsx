@@ -1,19 +1,33 @@
 
 import { CheckCircle, AlertTriangle, Info, Eye, Clock } from "lucide-react";
 
-const DetectionResults = () => {
-  // Mock detection result
-  const result = {
-    confidence: 92.5,
-    isDeepfake: false,
-    processingTime: 156,
+interface DetectionResultsProps {
+  result: {
+    confidence: number;
+    isDeepfake: boolean;
+    processingTime: number;
     analysis: {
-      spatial: { score: 94.2, status: 'authentic' },
-      temporal: { score: 89.1, status: 'authentic' },
-      audio: { score: 95.8, status: 'authentic' },
-      metadata: { score: 91.3, status: 'authentic' }
-    }
-  };
+      spatial: { score: number; status: string };
+      temporal: { score: number; status: string };
+      audio: { score: number; status: string };
+      metadata: { score: number; status: string };
+    };
+    explanation: string;
+  } | null;
+}
+
+const DetectionResults = ({ result }: DetectionResultsProps) => {
+  if (!result) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-lg">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Detection Results</h2>
+        <div className="text-center py-8">
+          <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500">Upload and analyze a file to see detection results</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -38,7 +52,7 @@ const DetectionResults = () => {
               {result.isDeepfake ? 'Potential Deepfake Detected' : 'Content Appears Authentic'}
             </h3>
             <p className="text-sm text-gray-600">
-              Confidence: {result.confidence}% | Processing time: {result.processingTime}ms
+              Confidence: {result.confidence.toFixed(1)}% | Processing time: {result.processingTime}ms
             </p>
           </div>
         </div>
@@ -61,34 +75,32 @@ const DetectionResults = () => {
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className={`h-2 rounded-full ${
-                  value.score > 90 ? 'bg-green-500' : 
-                  value.score > 70 ? 'bg-yellow-500' : 'bg-red-500'
+                  value.score > 80 ? 'bg-green-500' : 
+                  value.score > 60 ? 'bg-yellow-500' : 'bg-red-500'
                 }`}
                 style={{ width: `${value.score}%` }}
               ></div>
             </div>
-            <p className="text-sm text-gray-600 mt-1">{value.score}% confidence</p>
+            <p className="text-sm text-gray-600 mt-1">{value.score.toFixed(1)}% confidence</p>
           </div>
         ))}
       </div>
 
-      {/* Explanation */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      {/* AI Explanation */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <div className="flex items-start">
           <Info className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />
           <div>
-            <h4 className="font-medium text-blue-900 mb-2">Analysis Explanation</h4>
-            <p className="text-sm text-blue-800">
-              Our multimodal AI system analyzed the spatial features (pixel-level artifacts), 
-              temporal consistency (motion patterns), audio characteristics, and metadata. 
-              All indicators suggest this content is authentic with high confidence.
+            <h4 className="font-medium text-blue-900 mb-2">AI Analysis Explanation</h4>
+            <p className="text-sm text-blue-800 whitespace-pre-wrap">
+              {result.explanation || "Detailed analysis completed using multimodal AI detection algorithms."}
             </p>
           </div>
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 mt-6">
+      <div className="flex gap-3">
         <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           <Eye className="h-4 w-4 mr-2" />
           View Detailed Report
