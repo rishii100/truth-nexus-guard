@@ -49,69 +49,297 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     analysisHistory = [entry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
   }
 
-  // Download as HTML file
+  // Download as HTML file with exact page styling
   const downloadHTMLReport = () => {
     if (!result) return;
 
-    const status = result.isDeepfake ? 'POTENTIAL DEEPFAKE DETECTED' : 'CONTENT APPEARS AUTHENTIC';
+    const status = result.isDeepfake ? 'Potential Deepfake Detected' : 'Content Appears Authentic';
     const statusColor = result.isDeepfake ? '#dc2626' : '#059669';
+    const statusBg = result.isDeepfake ? '#fef2f2' : '#f0fdf4';
+    const statusBorder = result.isDeepfake ? '#fecaca' : '#bbf7d0';
+    const iconSvg = result.isDeepfake 
+      ? '<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>'
+      : '<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+
+    const cleanedExplanation = cleanExplanationText(result.explanation);
 
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
         <meta charset="UTF-8" />
-        <title>AI-Driven Deepfake Detector Report</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>AI-Driven Deepfake Detector - Analysis Report</title>
         <style>
-          body { font-family: Arial, sans-serif; background: #f7fafc; margin: 0; padding: 2em; }
-          .container { background: #fff; border-radius: 0.5em; box-shadow: 0 2px 8px #0001; padding: 2em; }
-          .title { font-size: 2em; font-weight: bold; margin-bottom: 0.2em; color: #1e293b; }
-          .subtitle { color: #475569; font-size: 1.1em; margin-bottom: 1.5em; }
-          .section-title { font-weight: bold; margin-top: 1.2em; color: #374151; font-size: 1.1em; }
-          .status { font-size: 1.1em; font-weight: bold; color: ${statusColor}; }
-          .scores { margin: 0.5em 0 1em 0; }
-          .scores .score { background: #f1f5f9; padding: 0.5em; border-radius: 0.3em; display: inline-block; margin: 0.25em 0.7em 0.25em 0; font-size: 0.98em;}
-          .details, .ai-summary { background: #f9fafb; border-radius: 0.25em; padding: 0.9em; margin-bottom: 1em; }
-          .footer { color: #64748b; font-size: 0.9em; margin-top: 2em; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f8fafc; 
+            color: #1e293b;
+            line-height: 1.6;
+            padding: 2rem;
+          }
+          .container { 
+            max-width: 800px;
+            margin: 0 auto;
+            background: white; 
+            border-radius: 0.5rem; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+          }
+          .header { 
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          .title { 
+            font-size: 2rem; 
+            font-weight: bold; 
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+          }
+          .subtitle { 
+            color: #64748b; 
+            font-size: 1rem;
+          }
+          
+          .overall-result {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid;
+            background: ${statusBg};
+            border-color: ${statusBorder};
+          }
+          .result-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+          }
+          .result-icon {
+            color: ${statusColor};
+            flex-shrink: 0;
+          }
+          .result-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: ${statusColor};
+            margin-bottom: 0.25rem;
+          }
+          .result-details {
+            font-size: 0.875rem;
+            color: #4b5563;
+          }
+          
+          .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+          }
+          .analysis-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background: white;
+          }
+          .analysis-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+          }
+          .analysis-title {
+            font-weight: 500;
+            color: #111827;
+            text-transform: capitalize;
+          }
+          .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: auto;
+          }
+          .status-authentic {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-suspicious {
+            background: #fee2e2;
+            color: #991b1b;
+          }
+          .progress-bar {
+            width: 100%;
+            height: 0.5rem;
+            background: #e5e7eb;
+            border-radius: 9999px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+          }
+          .progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+          }
+          .progress-green { background: #10b981; }
+          .progress-yellow { background: #f59e0b; }
+          .progress-red { background: #ef4444; }
+          .confidence-text {
+            font-size: 0.875rem;
+            color: #4b5563;
+          }
+          
+          .ai-insights {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 50%, #f3e8ff 100%);
+            margin-bottom: 1.5rem;
+          }
+          .ai-insights::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
+          }
+          .ai-content {
+            position: relative;
+            padding: 1.5rem;
+          }
+          .ai-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+          .ai-icon {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .ai-icon svg {
+            width: 1.25rem;
+            height: 1.25rem;
+            color: white;
+          }
+          .ai-text-content {
+            flex: 1;
+            min-width: 0;
+          }
+          .ai-title-section {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+          }
+          .ai-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+          }
+          .ai-divider {
+            height: 0.25rem;
+            flex: 1;
+            background: linear-gradient(90deg, #bfdbfe, #c7d2fe);
+            border-radius: 9999px;
+          }
+          .ai-explanation {
+            color: #374151;
+            line-height: 1.625;
+            font-weight: 500;
+            font-size: 1rem;
+            white-space: pre-line;
+          }
+          
+          .footer {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+          }
+          
+          @media print {
+            body { padding: 0; background: white; }
+            .container { box-shadow: none; }
+          }
         </style>
       </head>
       <body>
         <div class="container">
-          <div class="title">AI-Driven Deepfake Detector</div>
-          <div class="subtitle">Deepfake Analysis Report &mdash; ${new Date().toLocaleString()}</div>
-
-          <div class="section-title">File Information</div>
-          <div class="details">
-            <div><b>File Name:</b> ${result.fileName || 'N/A'}</div>
-            <div><b>File Type:</b> ${result.fileType || 'N/A'}</div>
-            <div><b>Processing Time:</b> ${result.processingTime} ms</div>
+          <div class="header">
+            <div class="title">Detection Results</div>
+            <div class="subtitle">Analysis Report • ${new Date().toLocaleString()}</div>
           </div>
 
-          <div class="section-title">Analysis Result</div>
-          <div class="details">
-            <div class="status">${status}</div>
-            <div><b>Confidence Level:</b> ${result.confidence.toFixed(1)}%</div>
-            <div class="scores">
-              ${Object.entries(result.analysis).map(([key, value]) =>
-                `<span class="score">${key.charAt(0).toUpperCase() + key.slice(1)}: ${value.score.toFixed(1)}% (${value.status})</span>`
-              ).join('')}
+          <div class="overall-result">
+            <div class="result-header">
+              <div class="result-icon">${iconSvg}</div>
+              <div>
+                <div class="result-title">${status}</div>
+                <div class="result-details">
+                  Confidence: ${result.confidence.toFixed(1)}% | Processing time: ${result.processingTime}ms
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="section-title">AI Analysis Summary</div>
-          <div class="ai-summary">${cleanExplanationText(result.explanation).replace(/\n/g, '<br/>')}</div>
+          <div class="analysis-grid">
+            ${Object.entries(result.analysis).map(([key, value]) => `
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">${key} Analysis</div>
+                  <span class="status-badge ${value.status === 'authentic' ? 'status-authentic' : 'status-suspicious'}">
+                    ${value.status}
+                  </span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill ${
+                    value.score > 80 ? 'progress-green' : 
+                    value.score > 60 ? 'progress-yellow' : 'progress-red'
+                  }" style="width: ${value.score}%"></div>
+                </div>
+                <div class="confidence-text">${value.score.toFixed(1)}% confidence</div>
+              </div>
+            `).join('')}
+          </div>
 
-          <div class="section-title">Technical Details</div>
-          <div class="details">
-            <div>Model Version: v2.1.4</div>
-            <div>Analysis Algorithm: Multi-modal CNN</div>
-            <div>Risk Level: ${result.isDeepfake ? 'High' : 'Low'}</div>
-            <div>Manipulation Probability: ${(100 - result.confidence).toFixed(1)}%</div>
+          <div class="ai-insights">
+            <div class="ai-content">
+              <div class="ai-header">
+                <div class="ai-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="ai-text-content">
+                  <div class="ai-title-section">
+                    <div class="ai-title">AI Analysis Insights</div>
+                    <div class="ai-divider"></div>
+                  </div>
+                  <div class="ai-explanation">${cleanedExplanation}</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="footer">
-            Disclaimer: This analysis is generated by AI and should be used as a preliminary assessment.<br/>
-            &copy; 2024 AI-Driven Deepfake Detector.
+            <div>File: ${result.fileName || 'N/A'} | Type: ${result.fileType || 'N/A'}</div>
+            <div style="margin-top: 0.5rem;">
+              Disclaimer: This analysis is generated by AI and should be used as a preliminary assessment.<br/>
+              © 2024 AI-Driven Deepfake Detector.
+            </div>
           </div>
         </div>
       </body>
