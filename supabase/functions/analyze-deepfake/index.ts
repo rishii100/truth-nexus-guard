@@ -20,7 +20,12 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { file, fileName, fileType }: AnalyzeRequest = await req.json();
+    const requestBody = await req.json();
+    const { file, fileName, fileType }: AnalyzeRequest = requestBody;
+    
+    if (!file || !fileName || !fileType) {
+      throw new Error("Missing required fields: file, fileName, or fileType");
+    }
     
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
@@ -29,11 +34,13 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Analyzing file: ${fileName} (${fileType})`);
     
-    // Convert base64 back to binary for analysis
-    const binaryData = Uint8Array.from(atob(file), c => c.charCodeAt(0));
+    // Validate base64 string
+    if (!file || file.length === 0) {
+      throw new Error("Invalid or empty file data");
+    }
     
-    // Call Google Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    // Call Google Gemini API with better error handling
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,14 +69,21 @@ const handler = async (req: Request): Promise<Response> => {
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error(`Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`, errorText);
+      throw new Error(`Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`);
     }
 
-    const result = await response.json();
+    const result = await geminiResponse.json();
     
-    // Process the response
-    const analysisText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Analysis could not be completed";
+    // Process the response with better error handling
+    const analysisText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!analysisText) {
+      console.error('Invalid response structure:', result);
+      throw new Error("Invalid response from AI analysis service");
+    }
     
     // Create a structured response
     const analysisResult = {
@@ -80,6 +94,8 @@ const handler = async (req: Request): Promise<Response> => {
       status: 'completed'
     };
 
+    console.log('Analysis completed successfully');
+
     return new Response(JSON.stringify(analysisResult), {
       status: 200,
       headers: {
@@ -89,10 +105,13 @@ const handler = async (req: Request): Promise<Response> => {
     });
   } catch (error: any) {
     console.error("Error in analyze-deepfake function:", error);
+    
+    // Return a proper error response
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        status: 'failed'
+        error: error.message || 'Unknown error occurred',
+        status: 'failed',
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,

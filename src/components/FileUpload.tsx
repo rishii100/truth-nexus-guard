@@ -47,33 +47,66 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       return;
     }
 
+    // Check file size limit (100MB)
+    if (uploadedFile.size > 100 * 1024 * 1024) {
+      setError("File size exceeds 100MB limit");
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     
     try {
-      console.log('Analyzing file:', uploadedFile.name);
+      console.log('Starting analysis for file:', uploadedFile.name);
       
-      // Convert file to base64
-      const fileBuffer = await uploadedFile.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-      
-      // Call the secure edge function
-      const { data, error: functionError } = await supabase.functions.invoke('analyze-deepfake', {
-        body: {
-          file: base64,
-          fileName: uploadedFile.name,
-          fileType: uploadedFile.type
-        }
+      // Convert file to base64 with proper error handling
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            // Remove data URL prefix to get just the base64 string
+            const base64String = reader.result.split(',')[1];
+            resolve(base64String);
+          } else {
+            reject(new Error('Failed to read file'));
+          }
+        };
+        reader.onerror = () => reject(new Error('File reading failed'));
+        reader.readAsDataURL(uploadedFile);
       });
+      
+      console.log('File converted to base64, calling edge function...');
+      
+      // Call the secure edge function with timeout
+      const { data, error: functionError } = await Promise.race([
+        supabase.functions.invoke('analyze-deepfake', {
+          body: {
+            file: base64,
+            fileName: uploadedFile.name,
+            fileType: uploadedFile.type
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+        )
+      ]) as any;
 
       if (functionError) {
-        throw new Error(functionError.message);
+        console.error('Edge function error:', functionError);
+        throw new Error(functionError.message || 'Analysis failed');
       }
 
+      if (!data) {
+        throw new Error('No response from analysis service');
+      }
+
+      console.log('Analysis completed successfully:', data);
       onAnalysisComplete(data);
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
       console.error('Analysis error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Analysis failed';
+      setError(errorMessage);
     } finally {
       setIsAnalyzing(false);
     }
