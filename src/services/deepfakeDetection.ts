@@ -1,4 +1,3 @@
-
 interface DetectionResult {
   confidence: number;
   isDeepfake: boolean;
@@ -66,7 +65,8 @@ AUTHENTIC signs (these are GOOD):
 
 IMPORTANT: A photo with natural imperfections, realistic lighting, and normal skin texture should score HIGH (80+), not low. Only lower scores for clear manipulation signs.
 
-Provide detailed analysis explaining your reasoning.`
+Provide detailed analysis explaining your reasoning.
+`
               },
               {
                 inline_data: {
@@ -126,28 +126,44 @@ const parseAIResponse = (response: string) => {
   const confidenceMatch = response.match(/CONFIDENCE_SCORE:\s*(\d+)/i);
   let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 70; // Higher default
   
-  console.log('Raw AI confidence:', confidence);
-  
   // Extract final verdict if available
   const verdictMatch = response.match(/FINAL_VERDICT:\s*(AUTHENTIC|DEEPFAKE|UNCERTAIN)/i);
   const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : null;
   
-  console.log('AI Verdict:', verdict);
-  
   const lowerResponse = response.toLowerCase();
-  
-  // Trust the AI's explicit verdict more
-  if (verdict === 'AUTHENTIC') {
-    // AI says it's authentic - trust it and boost confidence
-    confidence = Math.max(confidence, 70);
-    console.log('AI verdict indicates authentic, maintaining/boosting confidence');
-  } else if (verdict === 'DEEPFAKE') {
-    // AI says it's fake - trust it and lower confidence
-    confidence = Math.min(confidence, 35);
-    console.log('AI verdict indicates deepfake, setting low confidence');
-  }
-  
-  // Look for strong authenticity indicators
+
+  // Extended fake/deepfake indicators
+  const strongDeepfakeIndicators = [
+    'clearly artificial',
+    'obvious manipulation',
+    'ai-generated',
+    'synthetic',
+    'digital artifacts',
+    'unnatural lighting',
+    'signs of manipulation',
+    'deepfake',
+    'artificially generated',
+    'computer-generated',
+    'fake',
+    'severe artifact',
+    'significant artifact',
+    'major inconsistencies',
+    'high probability of being fake',
+    'impossible features',
+    'inconsistent',
+    'glitch',
+    'distortion',
+    'unreal',
+    'not real',
+    'face swap',
+    'stylegan',
+    'diffusion',
+    'latent',
+    'reconstructed'
+  ];
+  const strongDeepfakeCount = strongDeepfakeIndicators.filter(ind => lowerResponse.includes(ind)).length;
+
+  // Extended strong authenticity indicators
   const strongAuthenticityIndicators = [
     'appears authentic',
     'appears genuine',
@@ -156,46 +172,55 @@ const parseAIResponse = (response: string) => {
     'natural lighting',
     'no signs of manipulation',
     'genuine image',
-    'authentic image'
+    'authentic image',
+    'photo looks real',
+    'camera noise',
+    'natural noise pattern',
+    'real facial asymmetry'
   ];
-  
-  const strongAuthenticityCount = strongAuthenticityIndicators.filter(indicator => 
-    lowerResponse.includes(indicator)
-  ).length;
-  
-  // Look for strong deepfake indicators
-  const strongDeepfakeIndicators = [
-    'clearly artificial',
-    'obvious manipulation',
-    'ai-generated',
-    'synthetic',
-    'digital artifacts',
-    'unnatural lighting',
-    'signs of manipulation'
-  ];
-  
-  const strongDeepfakeCount = strongDeepfakeIndicators.filter(indicator => 
-    lowerResponse.includes(indicator)
-  ).length;
-  
-  // Adjust confidence based on strong indicators
-  if (strongAuthenticityCount >= 2 && strongDeepfakeCount === 0) {
+  const strongAuthenticityCount = strongAuthenticityIndicators.filter(ind => lowerResponse.includes(ind)).length;
+
+  // Decision logic
+  let isDeepfake = false;
+
+  // Explicit AI verdicts take highest precedence
+  if (verdict === 'AUTHENTIC') {
+    isDeepfake = false;
     confidence = Math.max(confidence, 75);
-    console.log(`Found ${strongAuthenticityCount} strong authenticity indicators, boosting confidence`);
-  } else if (strongDeepfakeCount >= 2 && strongAuthenticityCount === 0) {
+  } else if (verdict === 'DEEPFAKE') {
+    isDeepfake = true;
+    confidence = Math.min(confidence, 30); // Lower, stricter for fakes
+  } else if (verdict === 'UNCERTAIN') {
+    // Treat uncertain with extra caution
+    if (strongDeepfakeCount > 0 && strongAuthenticityCount === 0) {
+      isDeepfake = true;
+      confidence = Math.min(confidence, 30);
+    } else {
+      isDeepfake = confidence < 65; // Uncertainty: must be at least 65 to trust as real
+    }
+  } else if (strongDeepfakeCount > 0 && strongAuthenticityCount === 0) {
+    // If any clear deepfake indicators and no authentic cues, treat as fake
+    isDeepfake = true;
+    confidence = Math.min(confidence, 25 + 5 * strongDeepfakeCount);
+  } else if (strongAuthenticityCount > 1 && strongDeepfakeCount === 0) {
+    // Strong multiple authentic cues, no fake cues
+    isDeepfake = false;
+    confidence = Math.max(confidence, 80);
+  } else if (strongDeepfakeCount > 0 && strongAuthenticityCount > 0) {
+    // Mixed signals, treat as uncertain/fake
+    isDeepfake = true;
     confidence = Math.min(confidence, 40);
-    console.log(`Found ${strongDeepfakeCount} strong deepfake indicators, lowering confidence`);
+  } else {
+    // Default threshold: must have >= 60 to be accepted as real
+    isDeepfake = confidence < 60;
   }
-  
-  // Ensure confidence stays within bounds
+
+  // Clamp confidence
   confidence = Math.max(10, Math.min(95, confidence));
-  
-  console.log('Final parsed confidence:', confidence);
-  
+
   // Generate sub-scores based on confidence with realistic variance
   const baseScore = confidence;
   const variance = 8;
-  
   return {
     confidence,
     spatial: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),

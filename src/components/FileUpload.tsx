@@ -1,4 +1,3 @@
-
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../integrations/supabase/client";
@@ -95,7 +94,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       }
     }
 
-    // Strong authenticity indicators
+    // Extended strong authenticity indicators
     const authenticityIndicators = [
       'appears authentic',
       'appears genuine',
@@ -109,10 +108,13 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       'no signs of manipulation',
       'no obvious artifacts',
       'realistic texture',
-      'natural skin texture'
+      'natural skin texture',
+      'camera noise',
+      'noise pattern',
+      'real facial asymmetry'
     ];
 
-    // Strong deepfake indicators
+    // Extended deepfake indicators
     const deepfakeIndicators = [
       'deepfake',
       'ai-generated',
@@ -123,7 +125,20 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       'artificial intelligence',
       'signs of manipulation',
       'digital artifacts',
-      'inconsistent lighting'
+      'inconsistent lighting',
+      'fake',
+      'clearly artificial',
+      'obvious manipulation',
+      'major inconsistencies',
+      'impossible features',
+      'inconsistent',
+      'glitch',
+      'distortion',
+      'unreal',
+      'not real',
+      'face swap',
+      'stylegan',
+      'diffusion'
     ];
 
     const authenticityCount = authenticityIndicators.filter(indicator => 
@@ -150,36 +165,29 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       finalConfidence = Math.max(confidence, 75); // Boost confidence for authentic verdict
     } else if (verdict === 'deepfake' || verdict === 'fake') {
       isDeepfake = true;
-      finalConfidence = Math.min(confidence, 35); // Lower confidence for deepfake verdict
-    } 
-    // If we have explicit deepfake likelihood percentage
-    else if (deepfakeLikelihood !== null) {
-      if (deepfakeLikelihood <= 20) {
-        // Very low likelihood means authentic
-        isDeepfake = false;
-        finalConfidence = Math.max(confidence, 80);
-      } else if (deepfakeLikelihood >= 70) {
-        // High likelihood means deepfake
+      finalConfidence = Math.min(confidence, 30); // Lower confidence for deepfake verdict
+    } else if (verdict === 'uncertain') {
+      // Uncertain: Lower trust, treat as fake if any strong fake signal present
+      if (deepfakeCount > 0 && authenticityCount === 0) {
         isDeepfake = true;
-        finalConfidence = Math.min(confidence, 40);
+        finalConfidence = Math.min(confidence, 30);
       } else {
-        // Medium likelihood - use confidence score
-        isDeepfake = confidence < 50;
-        finalConfidence = confidence;
+        isDeepfake = confidence < 65;
       }
-    }
-    // Use indicator analysis
-    else if (authenticityCount >= 2 && deepfakeCount === 0) {
-      // Strong authenticity signals with no deepfake signals
+    } else if (deepfakeCount > 0 && authenticityCount === 0) {
+      // Clearly fake cues with no authentic ones
+      isDeepfake = true;
+      finalConfidence = Math.min(confidence, 25 + 5 * deepfakeCount);
+    } else if (authenticityCount > 1 && deepfakeCount === 0) {
+      // Many authenticity cues, no fakes
       isDeepfake = false;
       finalConfidence = Math.max(confidence, 80);
-    } else if (deepfakeCount >= 2 && authenticityCount === 0) {
-      // Strong deepfake signals with no authenticity signals
+    } else if (authenticityCount > 0 && deepfakeCount > 0) {
+      // Conflicting, mark as fake for safety
       isDeepfake = true;
-      finalConfidence = Math.min(confidence, 30);
+      finalConfidence = Math.min(confidence, 40);
     } else {
-      // Default to confidence-based decision with higher threshold
-      isDeepfake = confidence < 40; // Lower threshold means fewer false positives
+      isDeepfake = confidence < 60; // Higher threshold for real
       finalConfidence = confidence;
     }
 
