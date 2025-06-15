@@ -20,8 +20,8 @@ const Header = () => {
           <div className="flex items-center">
             <Shield className="h-8 w-8 text-blue-600 mr-3" />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Truth Nexus Guard</h1>
-              <p className="text-xs text-gray-500">AI-Driven Deepfake Detection</p>
+              <h1 className="text-xl font-bold text-gray-900">AI-Driven Deepfake Detector</h1>
+              <p className="text-xs text-gray-500">Advanced Media Authentication</p>
             </div>
           </div>
           

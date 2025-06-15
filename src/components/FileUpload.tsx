@@ -42,15 +42,16 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   };
 
   const parseAIAnalysis = (analysisText: string) => {
-    console.log('Parsing AI analysis:', analysisText);
+    console.log('Raw AI analysis text:', analysisText);
     
     const lowerText = analysisText.toLowerCase();
     
     // Look for explicit verdicts first
     const verdictPatterns = [
-      /final_verdict:\s*(authentic|deepfake|uncertain)/i,
-      /verdict:\s*(authentic|deepfake|uncertain)/i,
-      /conclusion:\s*(authentic|deepfake|uncertain)/i
+      /final_verdict:\s*(authentic|deepfake|uncertain|fake)/i,
+      /verdict:\s*(authentic|deepfake|uncertain|fake)/i,
+      /conclusion:\s*(authentic|deepfake|uncertain|fake)/i,
+      /result:\s*(authentic|deepfake|uncertain|fake)/i
     ];
     
     let verdict = null;
@@ -58,6 +59,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       const match = analysisText.match(pattern);
       if (match) {
         verdict = match[1].toLowerCase();
+        if (verdict === 'fake') verdict = 'deepfake'; // Normalize 'fake' to 'deepfake'
         break;
       }
     }
@@ -83,62 +85,78 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     
     console.log('Extracted confidence:', confidence);
     
-    // Strong indicators for fake content
+    // Strong indicators for fake content (be MORE aggressive)
     const strongFakeIndicators = [
-      'definitely fake', 'clearly ai-generated', 'obviously artificial',
-      'certainly deepfake', 'undoubtedly fake', 'digital manipulation detected',
-      'artificial generation', 'synthetic content', 'ai-created'
+      'artificial', 'fake', 'deepfake', 'synthetic', 'ai-generated', 'generated',
+      'digital manipulation', 'manipulated', 'edited', 'processed', 'enhanced',
+      'unnatural', 'suspicious', 'concerning', 'unlikely', 'unrealistic',
+      'perfect skin', 'too smooth', 'poreless', 'plastic-like', 'digital artifacts',
+      'strange', 'odd', 'unusual', 'inconsistent', 'filtered', 'artificial lighting'
     ];
     
     // Strong indicators for authentic content  
     const strongAuthenticIndicators = [
-      'definitely authentic', 'clearly real', 'obviously genuine',
-      'certainly authentic', 'undoubtedly real', 'natural photograph',
-      'genuine content', 'real person', 'authentic image'
+      'definitely authentic', 'clearly real', 'obviously genuine', 'natural photograph',
+      'genuine content', 'real person', 'authentic image', 'unprocessed', 'original',
+      'natural lighting', 'realistic', 'organic', 'untouched'
     ];
     
-    // Check for strong indicators
-    const hasStrongFakeIndicators = strongFakeIndicators.some(indicator => 
+    // Count indicators more aggressively
+    const fakeIndicatorCount = strongFakeIndicators.filter(indicator => 
       lowerText.includes(indicator)
-    );
+    ).length;
     
-    const hasStrongAuthenticIndicators = strongAuthenticIndicators.some(indicator => 
+    const authenticIndicatorCount = strongAuthenticIndicators.filter(indicator => 
       lowerText.includes(indicator)
-    );
+    ).length;
     
-    console.log('Strong fake indicators:', hasStrongFakeIndicators);
-    console.log('Strong authentic indicators:', hasStrongAuthenticIndicators);
+    console.log('Fake indicators found:', fakeIndicatorCount);
+    console.log('Authentic indicators found:', authenticIndicatorCount);
     
-    // Determine final result based on verdict and indicators
+    // More aggressive detection logic
     let isDeepfake = false;
     let finalConfidence = confidence;
     
-    if (verdict === 'deepfake' || hasStrongFakeIndicators) {
-      console.log('Marking as DEEPFAKE based on verdict/strong indicators');
+    // If AI explicitly says it's fake or uncertain, mark as fake
+    if (verdict === 'deepfake' || verdict === 'uncertain') {
+      console.log('AI verdict indicates potential fake content');
       isDeepfake = true;
-      finalConfidence = Math.min(confidence, 35); // Low confidence for fakes
-    } else if (verdict === 'authentic' || hasStrongAuthenticIndicators) {
-      console.log('Marking as AUTHENTIC based on verdict/strong indicators');
-      isDeepfake = false;
-      finalConfidence = Math.max(confidence, 75); // High confidence for authentic
-    } else {
-      // Fall back to keyword analysis
-      const fakeKeywords = ['fake', 'artificial', 'synthetic', 'generated', 'manipulation', 'suspicious'];
-      const realKeywords = ['authentic', 'real', 'genuine', 'natural', 'original'];
-      
-      const fakeCount = fakeKeywords.filter(word => lowerText.includes(word)).length;
-      const realCount = realKeywords.filter(word => lowerText.includes(word)).length;
-      
-      console.log('Fake keywords found:', fakeCount);
-      console.log('Real keywords found:', realCount);
-      
-      if (fakeCount > realCount) {
+      finalConfidence = Math.min(confidence, 30); // Very low confidence for fakes
+    } 
+    // If AI says authentic but we found suspicious indicators, be cautious
+    else if (verdict === 'authentic' && fakeIndicatorCount > 0) {
+      console.log('AI says authentic but found suspicious indicators');
+      if (fakeIndicatorCount >= 2) {
         isDeepfake = true;
-        finalConfidence = Math.min(confidence, 45);
+        finalConfidence = Math.min(confidence, 40);
+      } else {
+        isDeepfake = false;
+        finalConfidence = Math.max(confidence, 60);
+      }
+    }
+    // If AI says authentic and no suspicious indicators, likely real
+    else if (verdict === 'authentic' && fakeIndicatorCount === 0) {
+      console.log('AI says authentic with no suspicious indicators');
+      isDeepfake = false;
+      finalConfidence = Math.max(confidence, 75);
+    }
+    // Fall back to indicator counting with lower threshold
+    else {
+      console.log('Using fallback indicator analysis');
+      if (fakeIndicatorCount > authenticIndicatorCount || fakeIndicatorCount >= 1) {
+        isDeepfake = true;
+        finalConfidence = Math.min(confidence, 35);
       } else {
         isDeepfake = false;
         finalConfidence = Math.max(confidence, 65);
       }
+    }
+    
+    // Additional check: if confidence is very low (below 40), mark as suspicious
+    if (confidence < 40) {
+      console.log('Low confidence detected, marking as suspicious');
+      isDeepfake = true;
+      finalConfidence = Math.min(finalConfidence, 35);
     }
     
     // Ensure confidence is within bounds

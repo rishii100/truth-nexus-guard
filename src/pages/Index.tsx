@@ -68,7 +68,7 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="font-bold mb-4">Truth Nexus Guard</h3>
+              <h3 className="font-bold mb-4">AI-Driven Deepfake Detector</h3>
               <p className="text-gray-400 text-sm">
                 Advanced AI-driven deepfake detection for digital content integrity.
                 Protecting truth in the age of synthetic media.
@@ -87,13 +87,13 @@ const Index = () => {
               <h3 className="font-bold mb-4">Contact</h3>
               <div className="text-gray-400 text-sm space-y-2">
                 <p>Research & Development Team</p>
-                <p>truthnexus@research.in</p>
+                <p>deepfake@research.in</p>
                 <p>+91-XXX-XXX-XXXX</p>
               </div>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400 text-sm">
-            <p>&copy; 2024 Truth Nexus Guard. Built for digital integrity and trust.</p>
+            <p>&copy; 2024 AI-Driven Deepfake Detector. Built for digital integrity and trust.</p>
           </div>
         </div>
       </footer>
