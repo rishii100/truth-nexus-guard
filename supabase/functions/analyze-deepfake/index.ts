@@ -40,54 +40,46 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid or empty file data");
     }
     
-    // Enhanced prompt for better detection
-    const analysisPrompt = enhancedPrompt ? 
-      `You are an expert deepfake and AI-generated content detector. Analyze this ${fileType.split('/')[0]} with EXTREME precision to determine if it's REAL or AI-GENERATED.
+    // COMPLETELY REVISED PROMPT - More precise and technical
+    const analysisPrompt = `You are a professional deepfake detection expert. Analyze this image with extreme precision to determine if it's REAL or AI-GENERATED.
 
-CRITICAL ANALYSIS POINTS:
+CRITICAL ANALYSIS FRAMEWORK:
 
-FOR REAL PHOTOGRAPHS, look for:
-✓ Natural skin texture with visible pores, minor blemishes, realistic imperfections
-✓ Natural lighting that matches the environment and creates realistic shadows
-✓ Facial asymmetry (real faces are naturally asymmetric)
-✓ Natural eye reflections that match the lighting
-✓ Realistic hair texture with individual strands and natural variations
-✓ Camera grain/noise patterns typical of photography
-✓ Natural depth of field and background interactions
-✓ Spontaneous, natural expressions and micro-expressions
-✓ Realistic fabric textures and clothing details
-✓ Environmental consistency (lighting, shadows, reflections match setting)
+FOR REAL PHOTOGRAPHS (Score 70-90), look for ALL of these:
+✓ NATURAL SKIN TEXTURE: Visible pores, minor blemishes, realistic skin grain
+✓ NATURAL LIGHTING: Consistent shadows, realistic light fall-off, environmental matching
+✓ FACIAL ASYMMETRY: Real faces have subtle asymmetry - one eye slightly different, uneven features
+✓ NATURAL IMPERFECTIONS: Small scars, wrinkles, uneven skin tone, realistic aging
+✓ CAMERA ARTIFACTS: Natural grain, slight blur, realistic depth of field
+✓ HAIR TEXTURE: Individual strands, natural flow, realistic highlights
+✓ EYE DETAILS: Natural reflections matching environment, slight bloodshot, natural iris patterns
+✓ FABRIC/CLOTHING: Realistic textures, natural wrinkles, proper material behavior
+✓ BACKGROUND INTERACTION: Natural depth, realistic perspective, environmental consistency
 
-FOR AI-GENERATED/FAKE CONTENT, look for:
-✗ Overly perfect/smooth skin without natural texture or pores
-✗ Plastic-like or waxy appearance
-✗ Unnatural lighting that doesn't match the environment
-✗ Perfect symmetrical features (too perfect to be natural)
-✗ Digital artifacts around face/hair edges
-✗ Impossibly perfect teeth or unrealistic dental work
-✗ Eyes with unnatural reflections or misaligned pupils
-✗ Hair that looks painted or lacks realistic texture
-✗ Background inconsistencies or obvious artificial blurring
-✗ Overly polished appearance without natural imperfections
-✗ Lighting inconsistencies across the image
+FOR AI-GENERATED/FAKE CONTENT (Score 10-40), look for ANY of these:
+✗ PERFECT SKIN: Overly smooth, plastic-like, waxy appearance, no visible pores
+✗ UNNATURAL LIGHTING: Impossible light sources, inconsistent shadows, artificial glow
+✗ PERFECT SYMMETRY: Impossibly symmetrical features, too perfect proportions
+✗ DIGITAL ARTIFACTS: Weird edges around face/hair, color bleeding, compression artifacts
+✗ UNNATURAL EYES: Perfect alignment, identical pupils, unnatural reflections
+✗ HAIR ANOMALIES: Painted look, unnatural flow, missing individual strands
+✗ BACKGROUND ISSUES: Blurred inconsistencies, impossible perspectives, artificial bokeh
+✗ OVERALL PERFECTION: Too polished, lacks natural randomness of real photography
 
-INSTRUCTIONS:
-1. Examine EVERY detail meticulously
-2. State "APPEARS AUTHENTIC" if it shows clear signs of being a real photograph
-3. State "APPEARS ARTIFICIAL" if it shows signs of AI generation
-4. Be SPECIFIC about what features led to your conclusion
-5. Confidence should reflect the strength of evidence (90%+ for clear cases)
+ANALYSIS PROTOCOL:
+1. Examine skin texture closely - real skin has pores, minor imperfections, natural variation
+2. Check facial symmetry - real faces are naturally asymmetric
+3. Analyze lighting consistency - does it match the environment?
+4. Look for camera/photographic artifacts - grain, slight imperfections
+5. Check background consistency and realistic depth
 
-Provide detailed technical analysis of specific visual elements that support your conclusion.` :
+RESPONSE FORMAT:
+- Start with "CONFIDENCE: [10-90]"
+- State "APPEARS AUTHENTIC" for real photos or "APPEARS ARTIFICIAL" for AI-generated
+- List specific evidence that supports your conclusion
+- Be thorough and technical in your analysis
 
-      `Analyze this ${fileType.split('/')[0]} file for potential deepfake or AI-generated content. Provide a detailed analysis including:
-      1. Likelihood of being a deepfake (percentage)
-      2. Specific indicators found
-      3. Technical anomalies detected
-      4. Confidence level in the assessment
-      5. Recommendations for further verification
-      
-      Please be thorough and technical in your analysis.`;
+IMPORTANT: Real photographs should score 70+ unless there are clear manipulation signs. Only score below 60 if you find definitive AI generation indicators.`;
     
     // Call Google Gemini API
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {

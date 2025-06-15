@@ -45,54 +45,54 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
 
     const lowerText = analysisText.toLowerCase();
 
-    // Extract explicit confidence percentage from AI response
-    let aiConfidence = 50; // Default neutral
-    const confidenceMatch = analysisText.match(/(\d+)%?\s*confidence/i) || 
-                           analysisText.match(/confidence[:\s]*(\d+)%?/i) ||
-                           analysisText.match(/appears\s+(?:authentic|genuine).*?(\d+)%/i);
+    // Look for explicit AI confidence and verdict
+    let aiConfidence = 50;
+    const confidenceMatch = analysisText.match(/confidence[:\s]*(\d+)%?/i) || 
+                           analysisText.match(/(\d+)%?\s*confidence/i);
     if (confidenceMatch) {
       aiConfidence = parseInt(confidenceMatch[1]);
     }
 
-    // Extract explicit AI verdict
+    // Look for explicit AI verdict
     let aiVerdict = 'uncertain';
-    if (lowerText.includes('appears authentic') || lowerText.includes('appears genuine')) {
+    if (lowerText.includes('appears authentic') || lowerText.includes('genuine photograph') || lowerText.includes('real photograph')) {
       aiVerdict = 'authentic';
-    } else if (lowerText.includes('appears artificial') || lowerText.includes('appears fake')) {
+    } else if (lowerText.includes('appears artificial') || lowerText.includes('ai-generated') || lowerText.includes('synthetic') || lowerText.includes('fake')) {
       aiVerdict = 'fake';
     }
 
-    // Strong fake indicators - clear signs of AI generation
-    const strongFakeIndicators = [
+    // Strong indicators of AI generation (these are RED FLAGS)
+    const aiGenerationIndicators = [
       'ai-generated',
       'artificial',
-      'synthetic',
+      'synthetic', 
       'computer-generated',
       'digitally created',
       'deepfake',
       'fake',
       'too perfect',
-      'overly polished',
-      'unnaturally smooth',
-      'plastic-like appearance',
-      'digital artifacts',
-      'unnatural lighting',
-      'impossible lighting',
+      'overly smooth',
+      'plastic-like',
+      'waxy appearance',
+      'unnatural skin',
       'perfect skin',
       'flawless skin',
-      'unrealistic features',
+      'no pores',
+      'digital artifacts',
+      'unnatural lighting',
+      'perfect symmetry',
+      'impossibly perfect',
       'stylegan',
       'diffusion model',
-      'neural network generated',
-      'lacks natural imperfections',
-      'digitally enhanced beyond reality',
-      'computer graphics',
-      'rendered image',
-      'virtual creation'
+      'neural network',
+      'lacks imperfections',
+      'overly polished',
+      'unrealistic features',
+      'artificial smoothness'
     ];
 
-    // Strong authentic indicators - signs of real photography
-    const strongAuthenticIndicators = [
+    // Strong indicators of real photography (these are GOOD SIGNS)
+    const realPhotoIndicators = [
       'authentic',
       'genuine',
       'real photograph',
@@ -111,96 +111,85 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       'camera noise',
       'photographic grain',
       'natural depth',
-      'realistic depth of field',
       'environmental consistency',
-      'natural background',
       'spontaneous expression',
       'natural expression',
       'micro-expressions',
-      'natural eye reflections',
       'realistic hair texture',
       'individual hair strands',
       'natural fabric texture',
-      'real world setting',
-      'candid photograph'
+      'candid photograph',
+      'natural variations',
+      'realistic details'
     ];
 
     // Count indicators
-    const fakeCount = strongFakeIndicators.filter(indicator => 
+    const aiCount = aiGenerationIndicators.filter(indicator => 
       lowerText.includes(indicator)
     ).length;
 
-    const authCount = strongAuthenticIndicators.filter(indicator => 
+    const realCount = realPhotoIndicators.filter(indicator => 
       lowerText.includes(indicator)
     ).length;
 
+    console.log('AI Generation indicators found:', aiCount, aiGenerationIndicators.filter(i => lowerText.includes(i)));
+    console.log('Real photo indicators found:', realCount, realPhotoIndicators.filter(i => lowerText.includes(i)));
     console.log('AI Confidence:', aiConfidence);
     console.log('AI Verdict:', aiVerdict);
-    console.log('Fake indicators found:', fakeCount, strongFakeIndicators.filter(i => lowerText.includes(i)));
-    console.log('Authentic indicators found:', authCount, strongAuthenticIndicators.filter(i => lowerText.includes(i)));
 
-    // IMPROVED DECISION LOGIC - Trust the AI's assessment when clear
-    let isDeepfake = false;
-    let finalConfidence = aiConfidence;
+    // REVISED DECISION LOGIC - Be more strict about what passes as real
+    let isDeepfake = true; // Default to fake unless proven otherwise
+    let finalConfidence = 30; // Default low confidence
 
-    // Primary decision based on AI's explicit verdict and confidence
-    if (aiVerdict === 'authentic' && aiConfidence >= 80) {
-      // AI is confident it's authentic
-      isDeepfake = false;
-      finalConfidence = Math.min(90, aiConfidence);
-    } else if (aiVerdict === 'authentic' && aiConfidence >= 60 && authCount >= fakeCount) {
-      // AI says authentic with decent confidence and more auth indicators
+    // CASE 1: AI explicitly says it's authentic with high confidence AND has real indicators
+    if (aiVerdict === 'authentic' && aiConfidence >= 75 && realCount >= 3 && aiCount === 0) {
       isDeepfake = false;
       finalConfidence = Math.min(85, aiConfidence);
-    } else if (aiVerdict === 'fake' || (aiConfidence < 40 && fakeCount > authCount)) {
-      // AI says fake or low confidence with more fake indicators
-      isDeepfake = true;
-      finalConfidence = Math.max(20, Math.min(45, 100 - aiConfidence));
-    } else if (fakeCount >= 3 && authCount === 0) {
-      // Many fake indicators, no authentic ones
-      isDeepfake = true;
-      finalConfidence = Math.max(25, Math.min(40, 100 - aiConfidence));
-    } else if (authCount >= 5 && fakeCount <= 1 && aiConfidence >= 70) {
-      // Many authentic indicators, few/no fake ones, decent confidence
-      isDeepfake = false;
-      finalConfidence = Math.min(85, aiConfidence);
-    } else if (aiConfidence >= 75 && authCount > fakeCount) {
-      // High AI confidence with more authentic indicators
+    }
+    // CASE 2: AI says authentic with decent confidence, many real indicators, no AI indicators
+    else if (aiVerdict === 'authentic' && aiConfidence >= 65 && realCount >= 5 && aiCount <= 1) {
       isDeepfake = false;
       finalConfidence = Math.min(80, aiConfidence);
-    } else if (aiConfidence < 50 || fakeCount > authCount) {
-      // Low confidence or more fake indicators
+    }
+    // CASE 3: High confidence from AI, strong real indicators dominate
+    else if (aiConfidence >= 80 && realCount >= 4 && realCount > (aiCount * 2)) {
+      isDeepfake = false;
+      finalConfidence = Math.min(75, aiConfidence);
+    }
+    // CASE 4: Clear AI generation indicators - definitely fake
+    else if (aiCount >= 2 || aiVerdict === 'fake') {
       isDeepfake = true;
-      finalConfidence = Math.max(30, Math.min(55, 100 - aiConfidence));
-    } else {
-      // Uncertain cases - be slightly conservative but not overly strict
-      if (aiConfidence >= 65 && authCount >= 2) {
-        isDeepfake = false;
-        finalConfidence = Math.min(75, aiConfidence);
-      } else {
-        isDeepfake = true;
-        finalConfidence = Math.max(35, Math.min(50, 100 - aiConfidence));
-      }
+      finalConfidence = Math.max(15, Math.min(35, 100 - aiConfidence));
+    }
+    // CASE 5: Low AI confidence - likely fake
+    else if (aiConfidence < 60) {
+      isDeepfake = true;
+      finalConfidence = Math.max(20, Math.min(45, 100 - aiConfidence));
+    }
+    // CASE 6: Mixed signals or uncertain - lean towards fake for safety
+    else {
+      isDeepfake = true;
+      finalConfidence = Math.max(25, Math.min(40, 100 - aiConfidence));
     }
 
     // Ensure confidence bounds
-    finalConfidence = Math.max(15, Math.min(90, finalConfidence));
+    finalConfidence = Math.max(10, Math.min(90, finalConfidence));
 
     console.log('FINAL DECISION:');
     console.log('Is Deepfake:', isDeepfake);
     console.log('Final Confidence:', finalConfidence);
 
-    // Generate consistent sub-scores based on final confidence
-    const variance = 5;
+    // Generate sub-scores based on final decision
     const baseScore = finalConfidence;
+    const variance = 3;
     
     return {
       confidence: finalConfidence,
       isDeepfake,
-      spatial: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      temporal: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      audio: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      metadata: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
+      spatial: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      temporal: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      audio: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      metadata: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
     };
   };
 
