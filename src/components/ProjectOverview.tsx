@@ -38,7 +38,7 @@ const ProjectOverview = () => {
   const stats = [
     { label: "Detection Accuracy", value: ">95%" },
     { label: "Processing Time", value: "<200ms" },
-    { label: "Supported Formats", value: "10+" },
+    { label: "Supported Formats", value: "3+" },
     { label: "Languages Supported", value: "22+" }
   ];
 
