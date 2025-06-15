@@ -5,6 +5,14 @@ import { useState } from "react";
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+    setIsMenuOpen(false);
+  };
+
   return (
     <header className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -20,8 +28,12 @@ const Header = () => {
           <nav className="hidden md:flex space-x-8">
             <a href="#detection" className="text-gray-700 hover:text-blue-600 font-medium">Detection</a>
             <a href="#about" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
-            <a href="#features" className="text-gray-700 hover:text-blue-600 font-medium">Features</a>
-            <a href="#contact" className="text-gray-700 hover:text-blue-600 font-medium">Contact</a>
+            <button 
+              onClick={() => scrollToSection('features')} 
+              className="text-gray-700 hover:text-blue-600 font-medium"
+            >
+              Features
+            </button>
           </nav>
           
           <button 
@@ -37,8 +49,12 @@ const Header = () => {
             <nav className="flex flex-col space-y-2">
               <a href="#detection" className="text-gray-700 hover:text-blue-600 font-medium">Detection</a>
               <a href="#about" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
-              <a href="#features" className="text-gray-700 hover:text-blue-600 font-medium">Features</a>
-              <a href="#contact" className="text-gray-700 hover:text-blue-600 font-medium">Contact</a>
+              <button 
+                onClick={() => scrollToSection('features')} 
+                className="text-gray-700 hover:text-blue-600 font-medium text-left"
+              >
+                Features
+              </button>
             </nav>
           </div>
         )}
