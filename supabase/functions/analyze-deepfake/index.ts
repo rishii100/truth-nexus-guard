@@ -39,7 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid or empty file data");
     }
     
-    // Call Google Gemini API with better error handling
+    // Call Google Gemini API
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
@@ -77,7 +77,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const result = await geminiResponse.json();
     
-    // Process the response with better error handling
+    // Process the response
     const analysisText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!analysisText) {
