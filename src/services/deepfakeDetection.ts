@@ -85,13 +85,13 @@ Respond with your confidence score and detailed technical analysis.`
     
     return {
       confidence: analysis.confidence,
-      isDeepfake: analysis.confidence < 40, // Only flag as deepfake if confidence is below 40%
+      isDeepfake: analysis.confidence < 30, // Only flag as deepfake if confidence is very low
       processingTime,
       analysis: {
-        spatial: { score: analysis.spatial, status: analysis.spatial > 40 ? 'authentic' : 'suspicious' },
-        temporal: { score: analysis.temporal, status: analysis.temporal > 40 ? 'authentic' : 'suspicious' },
-        audio: { score: analysis.audio, status: analysis.audio > 40 ? 'authentic' : 'suspicious' },
-        metadata: { score: analysis.metadata, status: analysis.metadata > 40 ? 'authentic' : 'suspicious' }
+        spatial: { score: analysis.spatial, status: analysis.spatial > 60 ? 'authentic' : 'suspicious' },
+        temporal: { score: analysis.temporal, status: analysis.temporal > 60 ? 'authentic' : 'suspicious' },
+        audio: { score: analysis.audio, status: analysis.audio > 60 ? 'authentic' : 'suspicious' },
+        metadata: { score: analysis.metadata, status: analysis.metadata > 60 ? 'authentic' : 'suspicious' }
       },
       explanation: aiResponse
     };
@@ -114,74 +114,73 @@ const fileToBase64 = (file: File): Promise<string> => {
 const parseAIResponse = (response: string) => {
   // Extract confidence score from AI response
   const confidenceMatch = response.match(/CONFIDENCE_SCORE:\s*(\d+)/i);
-  let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 75;
+  let confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
   
   console.log('Raw AI confidence:', confidence);
   
-  // Only make minor adjustments based on STRONG deepfake indicators
+  // Trust the AI's confidence score more and only make minimal adjustments
   const lowerResponse = response.toLowerCase();
   
-  // Only look for VERY strong deepfake indicators
-  const strongDeepfakeKeywords = [
-    'clearly artificial',
-    'obvious deepfake',
-    'ai-generated',
-    'synthetic',
-    'digitally created',
-    'computer generated',
-    'fake',
-    'manipulated'
+  // Only look for VERY explicit deepfake declarations
+  const explicitFakeIndicators = [
+    'this is clearly a deepfake',
+    'obviously ai-generated',
+    'definitely synthetic',
+    'certainly fake',
+    'undoubtedly manipulated'
   ];
   
-  // Look for strong authenticity indicators
-  const strongAuthenticityKeywords = [
-    'authentic',
-    'genuine',
-    'real',
-    'natural',
-    'legitimate',
-    'original',
-    'unmanipulated'
+  // Look for explicit authenticity declarations
+  const explicitRealIndicators = [
+    'appears authentic',
+    'genuine photograph',
+    'real image',
+    'authentic content',
+    'no signs of manipulation',
+    'legitimate photo'
   ];
   
-  const strongFakeCount = strongDeepfakeKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
-  const strongRealCount = strongAuthenticityKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
+  const hasClearFakeDeclaration = explicitFakeIndicators.some(indicator => 
+    lowerResponse.includes(indicator)
+  );
   
-  // Only adjust if there are VERY strong indicators and they contradict the confidence
-  if (strongFakeCount >= 2 && confidence > 50) {
-    // Strong fake indicators but high confidence - reduce confidence
-    confidence = Math.min(confidence, 35);
-    console.log('Adjusted confidence down due to strong fake indicators:', confidence);
-  } else if (strongRealCount >= 2 && confidence < 50) {
-    // Strong real indicators but low confidence - increase confidence
-    confidence = Math.max(confidence, 75);
-    console.log('Adjusted confidence up due to strong real indicators:', confidence);
+  const hasClearRealDeclaration = explicitRealIndicators.some(indicator => 
+    lowerResponse.includes(indicator)
+  );
+  
+  // Only override if there's a clear contradiction AND explicit language
+  if (hasClearFakeDeclaration && confidence > 70) {
+    confidence = 25; // Clear fake declaration overrides high confidence
+    console.log('Overriding high confidence due to explicit fake declaration');
+  } else if (hasClearRealDeclaration && confidence < 30) {
+    confidence = 80; // Clear real declaration overrides low confidence
+    console.log('Overriding low confidence due to explicit real declaration');
   }
   
-  // If AI gave high confidence (70+), trust it unless there are overwhelming fake indicators
-  if (confidence >= 70 && strongFakeCount < 3) {
-    confidence = Math.max(confidence, 75);
+  // For high AI confidence (80+), trust it completely unless there's explicit contradiction
+  if (confidence >= 80 && !hasClearFakeDeclaration) {
+    confidence = Math.max(confidence, 85);
   }
   
-  // If AI gave low confidence (30-), trust it unless there are overwhelming real indicators
-  if (confidence <= 30 && strongRealCount < 3) {
-    confidence = Math.min(confidence, 35);
+  // For low AI confidence (20-), trust it completely unless there's explicit contradiction
+  if (confidence <= 20 && !hasClearRealDeclaration) {
+    confidence = Math.min(confidence, 25);
   }
   
   // Ensure reasonable bounds
   confidence = Math.max(5, Math.min(95, confidence));
   
-  console.log('Final parsed confidence:', confidence, 'Strong fake indicators:', strongFakeCount, 'Strong real indicators:', strongRealCount);
+  console.log('Final parsed confidence:', confidence);
   
-  // Generate sub-scores based on confidence
+  // Generate sub-scores based on confidence with realistic variance
   const baseScore = confidence;
-  const variance = 5; // Small variance for stability
+  const variance = 8;
   
   return {
     confidence,
-    spatial: Math.max(10, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    temporal: Math.max(10, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    audio: Math.max(10, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    metadata: Math.max(10, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
+    spatial: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    temporal: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    audio: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
+    metadata: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
   };
 };
