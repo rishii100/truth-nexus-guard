@@ -165,7 +165,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
                 <div className="h-1 flex-1 bg-gradient-to-r from-blue-200 to-purple-200 rounded-full"></div>
               </div>
               <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed font-medium text-base">
+                <p className="text-gray-700 leading-relaxed font-medium text-base m-0">
                   {result.explanation || "Detailed analysis completed using multimodal AI detection algorithms."}
                 </p>
               </div>
