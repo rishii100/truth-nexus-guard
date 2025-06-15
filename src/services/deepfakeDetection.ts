@@ -31,32 +31,34 @@ export const analyzeFile = async (file: File, apiKey: string): Promise<Detection
               {
                 text: `Analyze this ${file.type.startsWith('image') ? 'image' : file.type.startsWith('video') ? 'video' : 'audio'} for deepfake or AI-generated content.
 
-You are an expert deepfake detection system. Analyze carefully and provide an accurate assessment.
+You are an expert deepfake detection system. Be PRECISE and STRICT in your analysis.
 
 CRITICAL INSTRUCTIONS:
 1. Start your response with "CONFIDENCE_SCORE: [number from 0-100]"
-2. Higher scores (70-100) = AUTHENTIC/REAL content
+2. Higher scores (70-100) = AUTHENTIC/REAL content 
 3. Lower scores (0-30) = LIKELY DEEPFAKE/AI-GENERATED
-4. Medium scores (30-70) = UNCERTAIN
+4. Medium scores (30-70) = UNCERTAIN/NEEDS INVESTIGATION
 
 Look for these SPECIFIC deepfake/AI-generation indicators:
-- Unnatural facial blending or morphing artifacts
+- Unnatural facial blending, morphing, or warping artifacts
 - Inconsistent lighting that defies physics
-- Artificial skin texture (too perfect/plastic-like)
-- Warping around facial features, hair, or clothing edges
+- Artificial skin texture (too perfect, plastic-like, or unnaturally smooth)
+- Digital artifacts around facial features, hair, or clothing edges
 - Temporal inconsistencies in videos
-- Digital artifacts not from normal compression
+- Unrealistic shadows or reflections
+- Face-swapping artifacts or mismatched features
+- AI-generated pattern repetitions
 
-HOWEVER, remember that REAL photos commonly have:
-- Natural imperfections and normal lighting
-- Standard photo editing/filters
-- Compression artifacts
-- Natural shadows and reflections
-- Realistic skin texture with minor editing
+REAL photos commonly have:
+- Natural imperfections and realistic lighting
+- Consistent grain/noise patterns
+- Realistic skin texture with pores and minor blemishes
+- Natural shadows that match lighting sources
+- Authentic background interactions
 
-Be CONSERVATIVE in your assessment. Only flag as deepfake if you see CLEAR artificial indicators.
+Be ANALYTICAL and look for technical indicators. If you see clear signs of manipulation or AI generation, give a LOW confidence score. If the content appears genuinely authentic with natural characteristics, give a HIGH confidence score.
 
-Respond with your confidence score and detailed technical analysis.`
+Provide detailed technical reasoning for your assessment.`
               },
               {
                 inline_data: {
@@ -85,13 +87,13 @@ Respond with your confidence score and detailed technical analysis.`
     
     return {
       confidence: analysis.confidence,
-      isDeepfake: analysis.confidence < 30, // Only flag as deepfake if confidence is very low
+      isDeepfake: analysis.confidence < 50, // More balanced threshold
       processingTime,
       analysis: {
-        spatial: { score: analysis.spatial, status: analysis.spatial > 60 ? 'authentic' : 'suspicious' },
-        temporal: { score: analysis.temporal, status: analysis.temporal > 60 ? 'authentic' : 'suspicious' },
-        audio: { score: analysis.audio, status: analysis.audio > 60 ? 'authentic' : 'suspicious' },
-        metadata: { score: analysis.metadata, status: analysis.metadata > 60 ? 'authentic' : 'suspicious' }
+        spatial: { score: analysis.spatial, status: analysis.spatial > 50 ? 'authentic' : 'suspicious' },
+        temporal: { score: analysis.temporal, status: analysis.temporal > 50 ? 'authentic' : 'suspicious' },
+        audio: { score: analysis.audio, status: analysis.audio > 50 ? 'authentic' : 'suspicious' },
+        metadata: { score: analysis.metadata, status: analysis.metadata > 50 ? 'authentic' : 'suspicious' }
       },
       explanation: aiResponse
     };
@@ -118,69 +120,70 @@ const parseAIResponse = (response: string) => {
   
   console.log('Raw AI confidence:', confidence);
   
-  // Trust the AI's confidence score more and only make minimal adjustments
   const lowerResponse = response.toLowerCase();
   
-  // Only look for VERY explicit deepfake declarations
-  const explicitFakeIndicators = [
-    'this is clearly a deepfake',
-    'obviously ai-generated',
-    'definitely synthetic',
-    'certainly fake',
-    'undoubtedly manipulated'
+  // Look for strong deepfake indicators in the response
+  const strongFakeIndicators = [
+    'deepfake',
+    'ai-generated',
+    'artificial',
+    'synthetic',
+    'fake',
+    'manipulated',
+    'generated',
+    'digital artifacts',
+    'unnatural blending',
+    'warping',
+    'morphing'
   ];
   
-  // Look for explicit authenticity declarations
-  const explicitRealIndicators = [
-    'appears authentic',
-    'genuine photograph',
-    'real image',
-    'authentic content',
-    'no signs of manipulation',
-    'legitimate photo'
+  // Look for strong authenticity indicators
+  const strongRealIndicators = [
+    'authentic',
+    'genuine',
+    'real',
+    'natural',
+    'legitimate',
+    'original',
+    'unmanipulated'
   ];
   
-  const hasClearFakeDeclaration = explicitFakeIndicators.some(indicator => 
+  const fakeIndicatorCount = strongFakeIndicators.filter(indicator => 
     lowerResponse.includes(indicator)
-  );
+  ).length;
   
-  const hasClearRealDeclaration = explicitRealIndicators.some(indicator => 
+  const realIndicatorCount = strongRealIndicators.filter(indicator => 
     lowerResponse.includes(indicator)
-  );
+  ).length;
   
-  // Only override if there's a clear contradiction AND explicit language
-  if (hasClearFakeDeclaration && confidence > 70) {
-    confidence = 25; // Clear fake declaration overrides high confidence
-    console.log('Overriding high confidence due to explicit fake declaration');
-  } else if (hasClearRealDeclaration && confidence < 30) {
-    confidence = 80; // Clear real declaration overrides low confidence
-    console.log('Overriding low confidence due to explicit real declaration');
+  console.log('Fake indicators found:', fakeIndicatorCount);
+  console.log('Real indicators found:', realIndicatorCount);
+  
+  // Adjust confidence based on indicator analysis
+  if (fakeIndicatorCount > realIndicatorCount && fakeIndicatorCount >= 2) {
+    // Multiple fake indicators found - lower confidence significantly
+    confidence = Math.min(confidence, 35);
+    console.log('Multiple fake indicators detected, lowering confidence');
+  } else if (realIndicatorCount > fakeIndicatorCount && realIndicatorCount >= 2) {
+    // Multiple real indicators found - maintain or boost confidence
+    confidence = Math.max(confidence, 65);
+    console.log('Multiple real indicators detected, maintaining/boosting confidence');
   }
   
-  // For high AI confidence (80+), trust it completely unless there's explicit contradiction
-  if (confidence >= 80 && !hasClearFakeDeclaration) {
-    confidence = Math.max(confidence, 85);
-  }
-  
-  // For low AI confidence (20-), trust it completely unless there's explicit contradiction
-  if (confidence <= 20 && !hasClearRealDeclaration) {
-    confidence = Math.min(confidence, 25);
-  }
-  
-  // Ensure reasonable bounds
-  confidence = Math.max(5, Math.min(95, confidence));
+  // Ensure confidence stays within reasonable bounds
+  confidence = Math.max(10, Math.min(90, confidence));
   
   console.log('Final parsed confidence:', confidence);
   
   // Generate sub-scores based on confidence with realistic variance
   const baseScore = confidence;
-  const variance = 8;
+  const variance = 10;
   
   return {
     confidence,
-    spatial: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    temporal: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    audio: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-    metadata: Math.max(15, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
+    spatial: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+    temporal: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+    audio: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+    metadata: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
   };
 };
