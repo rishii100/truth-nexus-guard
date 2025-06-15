@@ -78,58 +78,15 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
   };
 
   const cleanExplanationText = (text: string) => {
-    if (!text) return "Detailed analysis completed using advanced AI detection algorithms. The content has been examined for signs of artificial generation or manipulation.";
-    
-    // Remove technical markers and formatting
-    let cleanedText = text
-      .replace(/CONFIDENCE_SCORE:\s*\d+/gi, '') // Remove confidence score line
-      .replace(/FINAL_VERDICT:\s*(AUTHENTIC|DEEPFAKE|UNCERTAIN)/gi, '') // Remove final verdict line
+    return text
       .replace(/\*\*/g, '') // Remove ** symbols
       .replace(/\*/g, '') // Remove * symbols
       .replace(/#{1,6}\s*/g, '') // Remove markdown headers
       .replace(/`{1,3}/g, '') // Remove code blocks
-      .replace(/^\s*[-•]\s*/gm, '• ') // Normalize bullet points
-      .replace(/\n{3,}/g, '\n\n') // Normalize multiple line breaks
+      .replace(/CONFIDENCE_SCORE:\s*\d+/i, '') // Remove confidence score line
+      .replace(/^\s*[-•]\s*/gm, '') // Remove bullet points
+      .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
       .trim();
-
-    // Extract key sections for better formatting
-    const sections = cleanedText.split(/(?=\*\*[A-Z].*?\*\*|[A-Z][A-Z\s]+:)/);
-    
-    // Format the text into readable paragraphs
-    let formattedText = '';
-    sections.forEach(section => {
-      if (section.trim()) {
-        // Clean up section headers
-        const cleanSection = section
-          .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold markers but keep text
-          .replace(/([A-Z\s]+):\s*/g, '$1: ') // Format headers
-          .trim();
-        
-        if (cleanSection.length > 20) { // Only include substantial content
-          formattedText += cleanSection + '\n\n';
-        }
-      }
-    });
-
-    // Final cleanup and ensure readable format
-    formattedText = formattedText
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/^\s+|\s+$/g, '')
-      .replace(/([.!?])\s*([A-Z])/g, '$1 $2'); // Ensure proper spacing
-
-    // If still too technical or empty, provide a clean summary
-    if (!formattedText || formattedText.length < 50) {
-      const confidence = result?.confidence || 50;
-      if (confidence >= 70) {
-        return "Analysis indicates this content appears to be authentic. The image shows natural characteristics consistent with genuine photography, including realistic lighting, natural skin texture, and proper depth of field.";
-      } else if (confidence >= 40) {
-        return "Analysis shows some areas of concern regarding authenticity. While not definitively artificial, certain characteristics warrant further examination, including potential inconsistencies in lighting, texture, or background elements.";
-      } else {
-        return "Analysis suggests this content may be artificially generated or manipulated. Multiple indicators point to potential AI generation, including unnatural smoothing, inconsistent lighting patterns, or digital artifacts.";
-      }
-    }
-
-    return formattedText;
   };
 
   if (!result) {
