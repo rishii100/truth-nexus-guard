@@ -1,5 +1,5 @@
 
-import { CheckCircle, AlertTriangle, Info, Eye, Clock, FileText, Download, Share2 } from "lucide-react";
+import { CheckCircle, AlertTriangle, Info, Eye, Clock, FileText, Download } from "lucide-react";
 import { useState } from "react";
 
 interface DetectionResultsProps {
@@ -17,9 +17,35 @@ interface DetectionResultsProps {
   } | null;
 }
 
+// Store analysis history in component state
+let analysisHistory: Array<{
+  id: number;
+  filename: string;
+  date: string;
+  confidence: number;
+  isDeepfake: boolean;
+  processingTime: number;
+}> = [];
+
 const DetectionResults = ({ result }: DetectionResultsProps) => {
   const [showDetailedReport, setShowDetailedReport] = useState(false);
   const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
+
+  // Add current result to history when it changes
+  if (result && !analysisHistory.find(item => 
+    item.confidence === result.confidence && 
+    item.processingTime === result.processingTime
+  )) {
+    const newEntry = {
+      id: Date.now(),
+      filename: "uploaded_file",
+      date: new Date().toISOString().split('T')[0],
+      confidence: result.confidence,
+      isDeepfake: result.isDeepfake,
+      processingTime: result.processingTime
+    };
+    analysisHistory = [newEntry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
+  }
 
   if (!result) {
     return (
@@ -32,12 +58,6 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
       </div>
     );
   }
-
-  const mockAnalysisHistory = [
-    { id: 1, filename: "video_sample.mp4", date: "2024-01-15", confidence: 78.5, isDeepfake: false },
-    { id: 2, filename: "suspicious_audio.wav", date: "2024-01-14", confidence: 45.2, isDeepfake: true },
-    { id: 3, filename: "profile_image.jpg", date: "2024-01-13", confidence: 92.1, isDeepfake: false },
-  ];
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -137,7 +157,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
           className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <Clock className="h-4 w-4 mr-2" />
-          Analysis History
+          Analysis History ({analysisHistory.length})
         </button>
       </div>
 
@@ -181,10 +201,6 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
                 <Download className="h-4 w-4 mr-2" />
                 Download Report
               </button>
-              <button className="flex items-center px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors">
-                <Share2 className="h-4 w-4 mr-2" />
-                Share Results
-              </button>
             </div>
           </div>
         </div>
@@ -194,7 +210,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
       {showAnalysisHistory && (
         <div className="border rounded-lg p-6 bg-gray-50">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Analysis History</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Analysis History</h3>
             <button
               onClick={() => setShowAnalysisHistory(false)}
               className="text-gray-500 hover:text-gray-700"
@@ -204,25 +220,32 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
           </div>
           
           <div className="space-y-3">
-            {mockAnalysisHistory.map((item) => (
-              <div key={item.id} className="flex items-center justify-between bg-white p-4 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">{item.filename}</p>
-                    <p className="text-sm text-gray-500">{item.date}</p>
+            {analysisHistory.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No analysis history available yet</p>
+              </div>
+            ) : (
+              analysisHistory.map((item) => (
+                <div key={item.id} className="flex items-center justify-between bg-white p-4 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium text-gray-900">{item.filename}</p>
+                      <p className="text-sm text-gray-500">{item.date} • {item.processingTime}ms</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-medium ${
+                      item.isDeepfake ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {item.isDeepfake ? 'Suspicious' : 'Authentic'}
+                    </p>
+                    <p className="text-xs text-gray-500">{item.confidence.toFixed(1)}% confidence</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className={`text-sm font-medium ${
-                    item.isDeepfake ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {item.isDeepfake ? 'Suspicious' : 'Authentic'}
-                  </p>
-                  <p className="text-xs text-gray-500">{item.confidence}% confidence</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
