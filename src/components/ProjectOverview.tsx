@@ -21,7 +21,7 @@ const ProjectOverview = () => {
     {
       icon: <Globe className="h-6 w-6 text-orange-600" />,
       title: "Indian Context Optimized",
-      description: "Trained on diverse Indian datasets with support for 22+ languages and regional contexts"
+      description: "Trained on diverse Indian datasets with support for regional contexts"
     },
     {
       icon: <Shield className="h-6 w-6 text-red-600" />,
@@ -38,8 +38,8 @@ const ProjectOverview = () => {
   const stats = [
     { label: "Detection Accuracy", value: ">95%" },
     { label: "Processing Time", value: "<200ms" },
-    { label: "Supported Formats", value: "3+" },
-    { label: "Languages Supported", value: "22+" }
+    { label: "Supported Formats", value: "3+" }
+    // "Languages Supported" removed
   ];
 
   return (
@@ -108,3 +108,4 @@ const ProjectOverview = () => {
 };
 
 export default ProjectOverview;
+

@@ -1,4 +1,3 @@
-
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../integrations/supabase/client";
@@ -43,30 +42,27 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
 
   const parseAIAnalysis = (analysisText: string) => {
     console.log('Raw AI analysis text:', analysisText);
-    
+
     const lowerText = analysisText.toLowerCase();
-    
-    // Look for explicit verdicts first
+
+    // Verdict regex patterns 
     const verdictPatterns = [
       /final_verdict:\s*(authentic|deepfake|uncertain|fake)/i,
       /verdict:\s*(authentic|deepfake|uncertain|fake)/i,
       /conclusion:\s*(authentic|deepfake|uncertain|fake)/i,
       /result:\s*(authentic|deepfake|uncertain|fake)/i
     ];
-    
+
     let verdict = null;
     for (const pattern of verdictPatterns) {
       const match = analysisText.match(pattern);
       if (match) {
         verdict = match[1].toLowerCase();
-        if (verdict === 'fake') verdict = 'deepfake'; // Normalize 'fake' to 'deepfake'
+        if (verdict === 'fake') verdict = 'deepfake'; // normalize
         break;
       }
     }
-    
-    console.log('Found verdict:', verdict);
-    
-    // Extract confidence score
+
     let confidence = 50; // default
     const confidencePatterns = [
       /confidence_score:\s*(\d+)/i,
@@ -74,7 +70,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       /(\d+)%\s*confidence/i,
       /score[:\s]*(\d+)/i
     ];
-    
+
     for (const pattern of confidencePatterns) {
       const match = analysisText.match(pattern);
       if (match) {
@@ -82,99 +78,83 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
         break;
       }
     }
-    
-    console.log('Extracted confidence:', confidence);
-    
-    // Strong indicators for fake content (be MORE aggressive)
+
+    // Indicator sets
     const strongFakeIndicators = [
-      'artificial', 'fake', 'deepfake', 'synthetic', 'ai-generated', 'generated',
-      'digital manipulation', 'manipulated', 'edited', 'processed', 'enhanced',
-      'unnatural', 'suspicious', 'concerning', 'unlikely', 'unrealistic',
-      'perfect skin', 'too smooth', 'poreless', 'plastic-like', 'digital artifacts',
-      'strange', 'odd', 'unusual', 'inconsistent', 'filtered', 'artificial lighting'
+      'deepfake', 'synthetic', 'ai-generated', 'artificial', 'fabricated', 'forged',
+      'manipulated', 'edited', 'tampered', 'unnatural', 'fake', 'suspicious', 'inconsistent'
     ];
-    
-    // Strong indicators for authentic content  
-    const strongAuthenticIndicators = [
-      'definitely authentic', 'clearly real', 'obviously genuine', 'natural photograph',
-      'genuine content', 'real person', 'authentic image', 'unprocessed', 'original',
-      'natural lighting', 'realistic', 'organic', 'untouched'
+    const strongRealIndicators = [
+      'authentic', 'genuine', 'original', 'natural', 'real', 'untouched', 'unprocessed',
+      'organic', 'not manipulated', 'not edited', 'not fake'
     ];
-    
-    // Count indicators more aggressively
-    const fakeIndicatorCount = strongFakeIndicators.filter(indicator => 
-      lowerText.includes(indicator)
-    ).length;
-    
-    const authenticIndicatorCount = strongAuthenticIndicators.filter(indicator => 
-      lowerText.includes(indicator)
-    ).length;
-    
-    console.log('Fake indicators found:', fakeIndicatorCount);
-    console.log('Authentic indicators found:', authenticIndicatorCount);
-    
-    // More aggressive detection logic
+
+    // Count indicators but only match whole words to reduce false positives
+    function countIndicators(indicatorList: string[]) {
+      return indicatorList.reduce((count, term) => {
+        // only match term as word boundary
+        const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+        return count + ((lowerText.match(regex) || []).length);
+      }, 0);
+    }
+
+    const fakeIndicatorCount = countIndicators(strongFakeIndicators);
+    const realIndicatorCount = countIndicators(strongRealIndicators);
+
+    // Main logic: 
+    // - Only mark as fake if AI explicitly says so or confidence is very low with lots of fake indicators.
+    // - If AI says authentic, confidence is high, and real indicators dominate, mark as real.
+    // - Use more conservative thresholding.
+
     let isDeepfake = false;
     let finalConfidence = confidence;
-    
-    // If AI explicitly says it's fake or uncertain, mark as fake
+
+    // If AI explicitly says it's fake/deepfake/uncertain
     if (verdict === 'deepfake' || verdict === 'uncertain') {
-      console.log('AI verdict indicates potential fake content');
       isDeepfake = true;
-      finalConfidence = Math.min(confidence, 30); // Very low confidence for fakes
+      finalConfidence = Math.max(10, Math.min(confidence, 35));
     } 
-    // If AI says authentic but we found suspicious indicators, be cautious
-    else if (verdict === 'authentic' && fakeIndicatorCount > 0) {
-      console.log('AI says authentic but found suspicious indicators');
-      if (fakeIndicatorCount >= 2) {
+    // If verdict is authentic and few fake indicators
+    else if (verdict === 'authentic' || verdict === "real") {
+      if (fakeIndicatorCount === 0 && confidence >= 65 && (realIndicatorCount > 0 || confidence > 80)) {
+        isDeepfake = false;
+        finalConfidence = Math.max(confidence, 85);
+      } else if (fakeIndicatorCount > 1 && confidence < 65) {
         isDeepfake = true;
         finalConfidence = Math.min(confidence, 40);
       } else {
+        // Lean toward authentic if verdict says so, unless strong evidence otherwise
         isDeepfake = false;
-        finalConfidence = Math.max(confidence, 60);
+        finalConfidence = Math.max(confidence, 70);
       }
-    }
-    // If AI says authentic and no suspicious indicators, likely real
-    else if (verdict === 'authentic' && fakeIndicatorCount === 0) {
-      console.log('AI says authentic with no suspicious indicators');
-      isDeepfake = false;
-      finalConfidence = Math.max(confidence, 75);
-    }
-    // Fall back to indicator counting with lower threshold
+    } 
+    // If no explicit verdict – decide by indicator counts & confidence thresholds
     else {
-      console.log('Using fallback indicator analysis');
-      if (fakeIndicatorCount > authenticIndicatorCount || fakeIndicatorCount >= 1) {
+      if (fakeIndicatorCount > realIndicatorCount && fakeIndicatorCount > 1 && confidence < 65) {
         isDeepfake = true;
-        finalConfidence = Math.min(confidence, 35);
+        finalConfidence = Math.min(confidence, 40);
+      } else if (confidence < 35 && fakeIndicatorCount > 0) {
+        isDeepfake = true;
+        finalConfidence = Math.min(confidence, 30);
       } else {
         isDeepfake = false;
-        finalConfidence = Math.max(confidence, 65);
+        finalConfidence = Math.max(confidence, 70);
       }
     }
-    
-    // Additional check: if confidence is very low (below 40), mark as suspicious
-    if (confidence < 40) {
-      console.log('Low confidence detected, marking as suspicious');
-      isDeepfake = true;
-      finalConfidence = Math.min(finalConfidence, 35);
-    }
-    
-    // Ensure confidence is within bounds
-    finalConfidence = Math.max(10, Math.min(95, finalConfidence));
-    
-    console.log('Final result - isDeepfake:', isDeepfake, 'confidence:', finalConfidence);
-    
-    // Generate sub-scores based on final assessment
+
+    // Clamp
+    finalConfidence = Math.max(10, Math.min(99, finalConfidence));
+    // Scores for subsystems
     const baseScore = finalConfidence;
     const variance = 8;
-    
+
     return {
       confidence: finalConfidence,
       isDeepfake,
-      spatial: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      temporal: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      audio: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      metadata: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
+      spatial: Math.max(20, Math.min(99, baseScore + (Math.random() - 0.5) * variance)),
+      temporal: Math.max(20, Math.min(99, baseScore + (Math.random() - 0.5) * variance)),
+      audio: Math.max(20, Math.min(99, baseScore + (Math.random() - 0.5) * variance)),
+      metadata: Math.max(20, Math.min(99, baseScore + (Math.random() - 0.5) * variance))
     };
   };
 
