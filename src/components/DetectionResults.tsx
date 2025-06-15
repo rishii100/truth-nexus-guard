@@ -49,6 +49,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     analysisHistory = [entry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
   }
 
+  // Download as HTML file
   const downloadHTMLReport = () => {
     if (!result) return;
 
@@ -122,6 +123,22 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `deepfake-analysis-report-${Date.now()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    }, 100);
+  };
+
+  // Download JSON report from modal
+  const downloadJSONReport = () => {
+    if (!result) return;
+    const filename = `deepfake-analysis-${Date.now()}.json`;
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
@@ -278,6 +295,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
           
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ... keep existing code for detailed info panels ... */}
               <div className="bg-white p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Technical Details</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
@@ -291,7 +309,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
                 <h4 className="font-medium text-gray-900 mb-2">Risk Assessment</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
                   <li>Overall Risk: {result.isDeepfake ? 'High' : 'Low'}</li>
-                  <li>Manipulation Probability: ${(100 - result.confidence).toFixed(1)}%</li>
+                  <li>Manipulation Probability: {(100 - result.confidence).toFixed(1)}%</li>
                   <li>Authenticity Score: {result.confidence.toFixed(1)}%</li>
                   <li>Recommendation: {result.isDeepfake ? 'Further Investigation' : 'Content Verified'}</li>
                 </ul>
@@ -300,7 +318,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
             
             <div className="flex gap-2">
               <button 
-                onClick={downloadHTMLReport}
+                onClick={downloadJSONReport}
                 className="flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
               >
                 <Download className="h-4 w-4 mr-2" />
