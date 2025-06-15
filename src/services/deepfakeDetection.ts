@@ -38,6 +38,7 @@ CRITICAL INSTRUCTIONS:
 2. Higher scores (70-100) = AUTHENTIC/REAL content 
 3. Lower scores (0-30) = LIKELY DEEPFAKE/AI-GENERATED
 4. Medium scores (30-70) = UNCERTAIN/NEEDS INVESTIGATION
+5. End with "FINAL_VERDICT: AUTHENTIC" or "FINAL_VERDICT: DEEPFAKE" or "FINAL_VERDICT: UNCERTAIN"
 
 Look for these SPECIFIC deepfake/AI-generation indicators:
 - Unnatural facial blending, morphing, or warping artifacts
@@ -87,7 +88,7 @@ Provide detailed technical reasoning for your assessment.`
     
     return {
       confidence: analysis.confidence,
-      isDeepfake: analysis.confidence < 50, // More balanced threshold
+      isDeepfake: analysis.confidence < 40, // Lower threshold for better accuracy
       processingTime,
       analysis: {
         spatial: { score: analysis.spatial, status: analysis.spatial > 50 ? 'authentic' : 'suspicious' },
@@ -120,64 +121,65 @@ const parseAIResponse = (response: string) => {
   
   console.log('Raw AI confidence:', confidence);
   
+  // Extract final verdict if available
+  const verdictMatch = response.match(/FINAL_VERDICT:\s*(AUTHENTIC|DEEPFAKE|UNCERTAIN)/i);
+  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : null;
+  
+  console.log('AI Verdict:', verdict);
+  
   const lowerResponse = response.toLowerCase();
   
-  // Look for strong deepfake indicators in the response
-  const strongFakeIndicators = [
-    'deepfake',
-    'ai-generated',
-    'artificial',
-    'synthetic',
-    'fake',
-    'manipulated',
-    'generated',
-    'digital artifacts',
-    'unnatural blending',
-    'warping',
-    'morphing'
-  ];
-  
-  // Look for strong authenticity indicators
-  const strongRealIndicators = [
-    'authentic',
-    'genuine',
-    'real',
-    'natural',
-    'legitimate',
-    'original',
-    'unmanipulated'
-  ];
-  
-  const fakeIndicatorCount = strongFakeIndicators.filter(indicator => 
-    lowerResponse.includes(indicator)
-  ).length;
-  
-  const realIndicatorCount = strongRealIndicators.filter(indicator => 
-    lowerResponse.includes(indicator)
-  ).length;
-  
-  console.log('Fake indicators found:', fakeIndicatorCount);
-  console.log('Real indicators found:', realIndicatorCount);
-  
-  // Adjust confidence based on indicator analysis
-  if (fakeIndicatorCount > realIndicatorCount && fakeIndicatorCount >= 2) {
-    // Multiple fake indicators found - lower confidence significantly
-    confidence = Math.min(confidence, 35);
-    console.log('Multiple fake indicators detected, lowering confidence');
-  } else if (realIndicatorCount > fakeIndicatorCount && realIndicatorCount >= 2) {
-    // Multiple real indicators found - maintain or boost confidence
-    confidence = Math.max(confidence, 65);
-    console.log('Multiple real indicators detected, maintaining/boosting confidence');
+  // Only override AI confidence in extreme cases with clear contradictory evidence
+  if (verdict === 'DEEPFAKE' && confidence > 50) {
+    console.log('AI verdict indicates deepfake but confidence is high, lowering confidence');
+    confidence = Math.min(confidence, 30);
+  } else if (verdict === 'AUTHENTIC' && confidence < 50) {
+    console.log('AI verdict indicates authentic but confidence is low, raising confidence');
+    confidence = Math.max(confidence, 60);
+  } else if (!verdict) {
+    // Fallback to keyword analysis only if no clear verdict
+    const strongDeepfakeStatements = [
+      'this is ai-generated',
+      'this is a deepfake',
+      'clearly manipulated',
+      'obviously fake',
+      'synthetic content',
+      'artificially created'
+    ];
+    
+    const strongAuthenticStatements = [
+      'appears authentic',
+      'genuine photograph',
+      'no signs of manipulation',
+      'appears real',
+      'natural and realistic'
+    ];
+    
+    const hasStrongFakeStatement = strongDeepfakeStatements.some(statement => 
+      lowerResponse.includes(statement)
+    );
+    
+    const hasStrongAuthenticStatement = strongAuthenticStatements.some(statement => 
+      lowerResponse.includes(statement)
+    );
+    
+    if (hasStrongFakeStatement && !hasStrongAuthenticStatement) {
+      confidence = Math.min(confidence, 25);
+      console.log('Strong fake statement detected, lowering confidence');
+    } else if (hasStrongAuthenticStatement && !hasStrongFakeStatement) {
+      confidence = Math.max(confidence, 75);
+      console.log('Strong authentic statement detected, maintaining high confidence');
+    }
   }
   
-  // Ensure confidence stays within reasonable bounds
+  // Ensure confidence stays within bounds
   confidence = Math.max(10, Math.min(90, confidence));
   
   console.log('Final parsed confidence:', confidence);
   
   // Generate sub-scores based on confidence with realistic variance
   const baseScore = confidence;
-  const variance = 10;
+  const variance = 8;
   
   return {
     confidence,
