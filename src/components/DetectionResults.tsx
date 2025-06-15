@@ -13,6 +13,9 @@ interface DetectionResultsProps {
       metadata: { score: number; status: string };
     };
     explanation: string;
+    fileName?: string;
+    fileType?: string;
+    timestamp?: string;
   } | null;
 }
 
@@ -37,7 +40,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
   )) {
     const entry = {
       id: Date.now(),
-      filename: "uploaded_file",
+      filename: result.fileName || "uploaded_file",
       date: new Date().toISOString().split('T')[0],
       confidence: result.confidence,
       isDeepfake: result.isDeepfake,
@@ -46,35 +49,107 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
     analysisHistory = [entry, ...analysisHistory.slice(0, 9)]; // Keep last 10 entries
   }
 
-  const downloadReport = () => {
+  const downloadPDFReport = () => {
     if (!result) return;
     
-    const reportData = {
-      timestamp: new Date().toISOString(),
-      confidence: result.confidence,
-      isDeepfake: result.isDeepfake,
-      processingTime: result.processingTime,
-      analysis: result.analysis,
-      explanation: result.explanation,
-      technicalDetails: {
-        modelVersion: "v2.1.4",
-        algorithm: "Multi-modal CNN",
-        qualityScore: Math.round(result.confidence * 0.9),
-        riskLevel: result.isDeepfake ? 'High' : 'Low',
-        manipulationProbability: (100 - result.confidence).toFixed(1) + '%',
-        recommendation: result.isDeepfake ? 'Further Investigation' : 'Content Verified'
-      }
-    };
+    // Create HTML content for PDF
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Deepfake Analysis Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+        .section { margin-bottom: 25px; }
+        .result-box { padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .authentic { background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .suspicious { background-color: #f8d7da; border: 1px solid #f5c6cb; }
+        .score-bar { background-color: #e9ecef; height: 20px; border-radius: 10px; margin: 5px 0; }
+        .score-fill { height: 100%; border-radius: 10px; }
+        .green { background-color: #28a745; }
+        .yellow { background-color: #ffc107; }
+        .red { background-color: #dc3545; }
+        .tech-details { background-color: #f8f9fa; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Truth Nexus Guard</h1>
+        <h2>Deepfake Analysis Report</h2>
+        <p>Generated on: ${new Date().toLocaleString()}</p>
+    </div>
 
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    <div class="section">
+        <h3>File Information</h3>
+        <p><strong>File Name:</strong> ${result.fileName || 'N/A'}</p>
+        <p><strong>File Type:</strong> ${result.fileType || 'N/A'}</p>
+        <p><strong>Processing Time:</strong> ${result.processingTime}ms</p>
+    </div>
+
+    <div class="section">
+        <h3>Analysis Result</h3>
+        <div class="result-box ${result.isDeepfake ? 'suspicious' : 'authentic'}">
+            <h4>${result.isDeepfake ? '⚠️ Potential Deepfake Detected' : '✅ Content Appears Authentic'}</h4>
+            <p><strong>Confidence Level:</strong> ${result.confidence.toFixed(1)}%</p>
+            <p><strong>Overall Assessment:</strong> ${result.isDeepfake ? 'Suspicious - Further investigation recommended' : 'Likely authentic content'}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Detailed Analysis Scores</h3>
+        ${Object.entries(result.analysis).map(([key, value]) => `
+            <div style="margin-bottom: 15px;">
+                <p><strong>${key.charAt(0).toUpperCase() + key.slice(1)} Analysis:</strong> ${value.score.toFixed(1)}% - ${value.status}</p>
+                <div class="score-bar">
+                    <div class="score-fill ${value.score > 70 ? 'green' : value.score > 50 ? 'yellow' : 'red'}" style="width: ${value.score}%;"></div>
+                </div>
+            </div>
+        `).join('')}
+    </div>
+
+    <div class="section">
+        <h3>AI Analysis Insights</h3>
+        <p>${cleanExplanationText(result.explanation)}</p>
+    </div>
+
+    <div class="section">
+        <h3>Technical Details</h3>
+        <div class="tech-details">
+            <p><strong>Model Version:</strong> v2.1.4</p>
+            <p><strong>Analysis Algorithm:</strong> Multi-modal CNN</p>
+            <p><strong>Quality Score:</strong> ${Math.round(result.confidence * 0.9)}%</p>
+            <p><strong>Risk Level:</strong> ${result.isDeepfake ? 'High' : 'Low'}</p>
+            <p><strong>Manipulation Probability:</strong> ${(100 - result.confidence).toFixed(1)}%</p>
+            <p><strong>Recommendation:</strong> ${result.isDeepfake ? 'Further Investigation Required' : 'Content Verified as Authentic'}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Disclaimer</h3>
+        <p style="font-size: 12px; color: #666;">
+            This analysis is generated by AI and should be used as a preliminary assessment. 
+            For critical decisions, additional verification methods are recommended. 
+            Truth Nexus Guard provides this analysis for informational purposes only.
+        </p>
+    </div>
+</body>
+</html>`;
+
+    // Create blob and download
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `deepfake-analysis-report-${Date.now()}.json`;
+    a.download = `deepfake-analysis-report-${Date.now()}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    
+    // Show message about PDF conversion
+    alert('Report downloaded as HTML. You can convert it to PDF using your browser\'s "Print to PDF" feature.');
   };
 
   const cleanExplanationText = (text: string) => {
@@ -195,6 +270,13 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
           View Detailed Report
         </button>
         <button 
+          onClick={downloadPDFReport}
+          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Download PDF Report
+        </button>
+        <button 
           onClick={() => setShowAnalysisHistory(!showAnalysisHistory)}
           className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
         >
@@ -240,7 +322,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
             
             <div className="flex gap-2">
               <button 
-                onClick={downloadReport}
+                onClick={downloadPDFReport}
                 className="flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
               >
                 <Download className="h-4 w-4 mr-2" />
