@@ -45,14 +45,13 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
 
     const lowerText = analysisText.toLowerCase();
 
-    // Verdict regex patterns 
+    // Extract verdict and confidence
     const verdictPatterns = [
       /final_verdict:\s*(authentic|deepfake|uncertain|fake)/i,
       /verdict:\s*(authentic|deepfake|uncertain|fake)/i,
       /conclusion:\s*(authentic|deepfake|uncertain|fake)/i,
       /result:\s*(authentic|deepfake|uncertain|fake)/i
     ];
-
     let verdict = null;
     for (const pattern of verdictPatterns) {
       const match = analysisText.match(pattern);
@@ -68,9 +67,10 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       /confidence_score:\s*(\d+)/i,
       /confidence[:\s]*(\d+)%?/i,
       /(\d+)%\s*confidence/i,
-      /score[:\s]*(\d+)/i
+      /score[:\s]*(\d+)/i,
+      /confidence level[:\s]*(\d+)/i,
+      /likelihood.+?(\d+)%/i
     ];
-
     for (const pattern of confidencePatterns) {
       const match = analysisText.match(pattern);
       if (match) {
@@ -79,7 +79,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       }
     }
 
-    // Indicator sets
+    // Indicator keywords
     const strongFakeIndicators = [
       'deepfake', 'synthetic', 'ai-generated', 'artificial', 'fabricated', 'forged',
       'manipulated', 'edited', 'tampered', 'unnatural', 'fake', 'suspicious', 'inconsistent'
@@ -88,65 +88,55 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       'authentic', 'genuine', 'original', 'natural', 'real', 'untouched', 'unprocessed',
       'organic', 'not manipulated', 'not edited', 'not fake'
     ];
-
-    // Count indicators but only match whole words to reduce false positives
     function countIndicators(indicatorList: string[]) {
       return indicatorList.reduce((count, term) => {
-        // only match term as word boundary
         const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
         return count + ((lowerText.match(regex) || []).length);
       }, 0);
     }
-
     const fakeIndicatorCount = countIndicators(strongFakeIndicators);
     const realIndicatorCount = countIndicators(strongRealIndicators);
 
-    // --- NEW: Refined Logic for Real vs. Fake ---
+    // --- IMPROVED LOGIC ---
     let isDeepfake = false;
     let finalConfidence = confidence;
 
-    if (verdict === 'deepfake' || verdict === 'uncertain') {
-      // If AI says deepfake/uncertain, treat as fake unless confidence is unusually high
-      isDeepfake = (confidence < 75);
-      finalConfidence = Math.max(10, Math.min(confidence, 40));
-    } else if (verdict === 'authentic' || verdict === 'real') {
-      if (confidence >= 65 && realIndicatorCount > fakeIndicatorCount) {
-        // Strong confidence + authentic verdict + more real indicators -> trust as real
-        isDeepfake = false;
-        finalConfidence = Math.max(confidence, 85);
-      } else if (confidence > 80) {
-        // High confidence alone, trust as real
-        isDeepfake = false;
-        finalConfidence = Math.max(confidence, 90);
-      } else if (fakeIndicatorCount >= 2 && confidence < 65) {
-        // Several fake indicators and low confidence, possibly fake
-        isDeepfake = true;
-        finalConfidence = Math.min(confidence, 40);
-      } else {
-        // Default: trust the verdict, unless there is overwhelming evidence
-        isDeepfake = false;
-        finalConfidence = Math.max(confidence, 70);
-      }
-    } else {
-      // No explicit verdict
-      if (fakeIndicatorCount >= 3 && confidence < 65) {
-        isDeepfake = true;
-        finalConfidence = Math.min(confidence, 35);
-      } else if (fakeIndicatorCount >= 1 && confidence < 40) {
+    // 1. Explicit authentic verdict with high confidence → always trust as real
+    if ((verdict === 'authentic' || verdict === 'real') && confidence >= 60) {
+      isDeepfake = false;
+      // Bump confidence up a bit if needed
+      finalConfidence = Math.max(confidence, 85);
+    }
+    // 2. Explicit deepfake verdict
+    else if (verdict === 'deepfake') {
+      isDeepfake = true;
+      finalConfidence = Math.min(confidence, 30);
+    }
+    // 3. Explicit uncertain verdict
+    else if (verdict === 'uncertain') {
+      isDeepfake = confidence < 70 || fakeIndicatorCount >= 2;
+      finalConfidence = Math.max(10, Math.min(confidence, 55));
+    }
+    // 4. No verdict
+    else {
+      if (confidence < 40 && fakeIndicatorCount >= 3) {
         isDeepfake = true;
         finalConfidence = Math.min(confidence, 30);
-      } else {
+      } else if (fakeIndicatorCount === 0 && realIndicatorCount > fakeIndicatorCount && confidence >= 60) {
         isDeepfake = false;
-        finalConfidence = Math.max(confidence, 70);
+        finalConfidence = Math.max(confidence, 75);
+      } else {
+        // Fallback: only mark as deepfake if case is strong
+        isDeepfake = false;
+        finalConfidence = Math.max(confidence, 65);
       }
     }
 
-    // Force clamp to normal range
+    // Clamp confidence
     finalConfidence = Math.max(10, Math.min(99, finalConfidence));
-    // subsystem scores
+    // Subscores add variance as before
     const baseScore = finalConfidence;
     const variance = 8;
-
     return {
       confidence: finalConfidence,
       isDeepfake,
