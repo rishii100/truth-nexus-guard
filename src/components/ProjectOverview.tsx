@@ -1,5 +1,5 @@
 
-import { Shield, Zap, Globe, Lock, Brain, Users } from "lucide-react";
+import { Shield, Zap, Globe, Lock, Brain, Users, Languages } from "lucide-react";
 
 const ProjectOverview = () => {
   const features = [
@@ -42,6 +42,24 @@ const ProjectOverview = () => {
     { label: "Languages Supported", value: "22+" }
   ];
 
+  const languageExamples = [
+    {
+      language: "English",
+      text: "Detecting synthetic media with AI precision",
+      flag: "🇺🇸"
+    },
+    {
+      language: "हिंदी (Hindi)",
+      text: "एआई सटीकता के साथ सिंथेटिक मीडिया का पता लगाना",
+      flag: "🇮🇳"
+    },
+    {
+      language: "বাংলা (Bengali)",
+      text: "এআই নির্ভুলতার সাথে সিন্থেটিক মিডিয়া সনাক্তকরণ",
+      flag: "🇧🇩"
+    }
+  ];
+
   return (
     <div className="space-y-8">
       {/* Hero Section */}
@@ -60,6 +78,35 @@ const ProjectOverview = () => {
               <div className="text-sm opacity-80">{stat.label}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Multilingual Support Demo */}
+      <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-6">
+        <div className="flex items-center mb-4">
+          <Languages className="h-6 w-6 text-green-600 mr-3" />
+          <h2 className="text-2xl font-bold text-gray-900">Multilingual AI Detection</h2>
+        </div>
+        <p className="text-gray-700 mb-6">
+          Our system can analyze and detect deepfakes in content across 22+ languages, 
+          understanding context and cultural nuances specific to different regions.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {languageExamples.map((example, index) => (
+            <div key={index} className="bg-white p-4 rounded-lg shadow-sm border">
+              <div className="flex items-center mb-2">
+                <span className="text-2xl mr-2">{example.flag}</span>
+                <span className="font-semibold text-gray-800">{example.language}</span>
+              </div>
+              <p className="text-gray-600 text-sm italic">"{example.text}"</p>
+            </div>
+          ))}
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <strong>Supported Languages Include:</strong> Hindi, Bengali, Telugu, Marathi, Tamil, Gujarati, 
+          Urdu, Kannada, Malayalam, Punjabi, Odia, Assamese, and 10+ more Indian regional languages plus English.
         </div>
       </div>
 
