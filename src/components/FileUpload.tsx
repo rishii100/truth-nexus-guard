@@ -45,8 +45,8 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
 
     const lowerText = analysisText.toLowerCase();
 
-    // Extract confidence level from various patterns
-    let confidence = 80; // Higher default confidence for authentic photos
+    // Extract confidence level from various patterns - default to lower confidence
+    let confidence = 50; // Lower default confidence
     const confidencePatterns = [
       /confidence_score:\s*(\d+)/i,
       /confidence level.*?(\d+)%/i,
@@ -94,12 +94,49 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       }
     }
 
-    // Context-aware authenticity indicators (positive signals)
-    const positiveAuthenticityPhrases = [
+    // STRICT deepfake indicators - these should flag as fake immediately
+    const strongDeepfakeIndicators = [
+      'clearly artificial',
+      'obvious manipulation',
+      'ai-generated',
+      'synthetic',
+      'digital artifacts',
+      'unnatural lighting',
+      'signs of manipulation',
+      'deepfake',
+      'artificially generated',
+      'computer-generated',
+      'fake',
+      'severe artifact',
+      'significant artifact',
+      'major inconsistencies',
+      'high probability of being fake',
+      'impossible features',
+      'inconsistent',
+      'glitch',
+      'distortion',
+      'face swap',
+      'stylegan',
+      'diffusion',
+      'latent space',
+      'reconstructed',
+      'generated',
+      'artificial intelligence',
+      'machine learning',
+      'neural network',
+      'too perfect',
+      'unnaturally smooth',
+      'plastic-like skin',
+      'asymmetric eyes',
+      'teeth too perfect',
+      'background blur inconsistent'
+    ];
+
+    // VERY STRICT authenticity indicators - only these phrases indicate real photos
+    const authenticityIndicators = [
       'appears authentic',
       'appears genuine',
       'appears real',
-      'highly likely to be genuine',
       'natural photograph',
       'genuine photograph',
       'authentic image',
@@ -108,107 +145,99 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       'no obvious visual artifacts',
       'no signs of manipulation',
       'no evidence of manipulation',
-      'lacks common deepfake giveaways',
       'natural lighting',
       'realistic texture',
       'natural skin texture',
-      'highly improbable that this image is a deepfake',
-      'extremely low',
-      'very low likelihood'
+      'natural facial features',
+      'genuine expressions',
+      'camera noise',
+      'natural imperfections',
+      'realistic shadows',
+      'proper depth of field'
     ];
 
-    // Context-aware deepfake indicators (negative signals)
-    const negativeDeepfakePhrases = [
-      'clear signs of deepfake',
-      'obvious deepfake',
-      'definitely a deepfake',
-      'high probability of being fake',
-      'likely to be deepfake',
-      'signs of ai generation',
-      'artificially generated',
-      'computer-generated',
-      'digital manipulation detected',
-      'suspicious artifacts',
-      'unnatural features',
-      'inconsistent lighting'
-    ];
-
-    const positiveCount = positiveAuthenticityPhrases.filter(phrase => 
+    const deepfakeCount = strongDeepfakeIndicators.filter(phrase => 
       lowerText.includes(phrase)
     ).length;
 
-    const negativeCount = negativeDeepfakePhrases.filter(phrase => 
+    const authenticityCount = authenticityIndicators.filter(phrase => 
       lowerText.includes(phrase)
     ).length;
 
     console.log('Verdict:', verdict);
     console.log('Confidence extracted:', confidence);
     console.log('Deepfake likelihood:', deepfakeLikelihood);
-    console.log('Positive authenticity phrases:', positiveCount);
-    console.log('Negative deepfake phrases:', negativeCount);
+    console.log('Deepfake indicators found:', deepfakeCount);
+    console.log('Authenticity indicators found:', authenticityCount);
 
-    // Decision logic - trust the AI's assessment more directly
-    let isDeepfake = false;
-    let finalConfidence = confidence;
+    // VERY STRICT decision logic - be extremely conservative
+    let isDeepfake = true; // Default to fake unless proven otherwise
+    let finalConfidence = 25; // Default low confidence
 
-    // If deepfake likelihood is explicitly low (under 20%), treat as authentic
-    if (deepfakeLikelihood !== null && deepfakeLikelihood <= 20) {
+    // Only trust as authentic if there are STRONG positive signals
+    if (verdict === 'authentic' && authenticityCount >= 2 && deepfakeCount === 0) {
+      // Only if AI explicitly says authentic AND has multiple authenticity indicators AND no deepfake indicators
       isDeepfake = false;
-      finalConfidence = Math.max(confidence, 80);
-    }
-    // If deepfake likelihood is explicitly high (over 70%), treat as fake
-    else if (deepfakeLikelihood !== null && deepfakeLikelihood >= 70) {
-      isDeepfake = true;
-      finalConfidence = Math.min(confidence, 30);
-    }
-    // Trust explicit verdict
-    else if (verdict === 'authentic') {
+      finalConfidence = Math.min(confidence, 85); // Cap at 85% even for authentic
+    } 
+    // If deepfake likelihood is explicitly very low (under 10%) AND we have authenticity indicators
+    else if (deepfakeLikelihood !== null && deepfakeLikelihood <= 10 && authenticityCount >= 1 && deepfakeCount === 0) {
       isDeepfake = false;
-      finalConfidence = Math.max(confidence, 80);
-    } else if (verdict === 'deepfake' || verdict === 'fake') {
-      isDeepfake = true;
-      finalConfidence = Math.min(confidence, 25);
+      finalConfidence = Math.min(75, confidence);
     }
-    // High confidence from AI (80+) generally means authentic
-    else if (confidence >= 80) {
+    // Any mention of deepfake indicators = fake
+    else if (deepfakeCount > 0) {
+      isDeepfake = true;
+      finalConfidence = Math.max(10, Math.min(30, confidence));
+    }
+    // High deepfake likelihood = fake
+    else if (deepfakeLikelihood !== null && deepfakeLikelihood >= 30) {
+      isDeepfake = true;
+      finalConfidence = Math.max(10, Math.min(25, confidence));
+    }
+    // Uncertain verdict = treat as fake to be safe
+    else if (verdict === 'uncertain' || verdict === 'deepfake' || verdict === 'fake') {
+      isDeepfake = true;
+      finalConfidence = Math.max(10, Math.min(35, confidence));
+    }
+    // Very high AI confidence (90+) with no negative indicators might be real
+    else if (confidence >= 90 && deepfakeCount === 0 && authenticityCount > 0) {
       isDeepfake = false;
-      finalConfidence = confidence;
+      finalConfidence = Math.min(80, confidence);
     }
-    // Low confidence from AI (30-) generally means fake
-    else if (confidence <= 30) {
-      isDeepfake = true;
-      finalConfidence = confidence;
-    }
-    // Check contextual phrases
-    else if (positiveCount > 0 && negativeCount === 0) {
+    // Medium-high confidence (80+) but needs authenticity indicators
+    else if (confidence >= 80 && authenticityCount >= authenticityCount && deepfakeCount === 0) {
       isDeepfake = false;
-      finalConfidence = Math.max(confidence, 75);
-    } else if (negativeCount > 0 && positiveCount === 0) {
-      isDeepfake = true;
-      finalConfidence = Math.min(confidence, 35);
+      finalConfidence = Math.min(75, confidence);
     }
-    // Default: trust the confidence score directly
+    // Everything else = fake (conservative approach)
     else {
-      isDeepfake = confidence < 60;
-      finalConfidence = confidence;
+      isDeepfake = true;
+      finalConfidence = Math.max(15, Math.min(40, confidence));
     }
 
-    // Ensure confidence stays within realistic bounds
-    finalConfidence = Math.max(15, Math.min(95, finalConfidence));
+    // Final safety check - if no strong authenticity signals, default to fake
+    if (!isDeepfake && authenticityCount === 0) {
+      isDeepfake = true;
+      finalConfidence = Math.max(15, Math.min(35, confidence));
+    }
+
+    // Ensure confidence stays within bounds
+    finalConfidence = Math.max(10, Math.min(90, finalConfidence));
 
     console.log('Final decision - isDeepfake:', isDeepfake, 'confidence:', finalConfidence);
 
-    // Generate sub-scores with some variance but based on main confidence
+    // Generate sub-scores based on main decision
     const baseScore = finalConfidence;
-    const variance = 8;
+    const variance = 5; // Reduced variance for more consistent results
     
     return {
       confidence: finalConfidence,
       isDeepfake,
-      spatial: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      temporal: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      audio: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance)),
-      metadata: Math.max(20, Math.min(95, baseScore + (Math.random() - 0.5) * variance))
+      spatial: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      temporal: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      audio: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      metadata: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
     };
   };
 
