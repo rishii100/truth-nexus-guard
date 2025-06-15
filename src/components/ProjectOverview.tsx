@@ -103,24 +103,6 @@ const ProjectOverview = () => {
           </div>
         </div>
       </div>
-
-      {/* Technical Architecture */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Technical Architecture</h2>
-        <div className="bg-gray-50 p-4 rounded-lg font-mono text-sm">
-          <div className="text-center mb-4 text-gray-600">
-            [Data Ingestion/APIs] → [Preprocessing] → [AI Model Layer] → [Detection Engine] → [UI/API Layer]
-          </div>
-          <div className="text-center text-gray-600">
-            ↓<br/>
-            [Provenance: Blockchain] ← [Storage/Audit]
-          </div>
-        </div>
-        <p className="text-gray-600 mt-4 text-sm">
-          Our system processes multimodal inputs through specialized AI models for spatial, temporal, 
-          audio, and textual analysis, with blockchain-based provenance tracking for complete audit trails.
-        </p>
-      </div>
     </div>
   );
 };
