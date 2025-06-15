@@ -101,39 +101,38 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     const fakeIndicatorCount = countIndicators(strongFakeIndicators);
     const realIndicatorCount = countIndicators(strongRealIndicators);
 
-    // Main logic: 
-    // - Only mark as fake if AI explicitly says so or confidence is very low with lots of fake indicators.
-    // - If AI says authentic, confidence is high, and real indicators dominate, mark as real.
-    // - Use more conservative thresholding.
-
+    // --- NEW: Refined Logic for Real vs. Fake ---
     let isDeepfake = false;
     let finalConfidence = confidence;
 
-    // If AI explicitly says it's fake/deepfake/uncertain
     if (verdict === 'deepfake' || verdict === 'uncertain') {
-      isDeepfake = true;
-      finalConfidence = Math.max(10, Math.min(confidence, 35));
-    } 
-    // If verdict is authentic and few fake indicators
-    else if (verdict === 'authentic' || verdict === "real") {
-      if (fakeIndicatorCount === 0 && confidence >= 65 && (realIndicatorCount > 0 || confidence > 80)) {
+      // If AI says deepfake/uncertain, treat as fake unless confidence is unusually high
+      isDeepfake = (confidence < 75);
+      finalConfidence = Math.max(10, Math.min(confidence, 40));
+    } else if (verdict === 'authentic' || verdict === 'real') {
+      if (confidence >= 65 && realIndicatorCount > fakeIndicatorCount) {
+        // Strong confidence + authentic verdict + more real indicators -> trust as real
         isDeepfake = false;
         finalConfidence = Math.max(confidence, 85);
-      } else if (fakeIndicatorCount > 1 && confidence < 65) {
+      } else if (confidence > 80) {
+        // High confidence alone, trust as real
+        isDeepfake = false;
+        finalConfidence = Math.max(confidence, 90);
+      } else if (fakeIndicatorCount >= 2 && confidence < 65) {
+        // Several fake indicators and low confidence, possibly fake
         isDeepfake = true;
         finalConfidence = Math.min(confidence, 40);
       } else {
-        // Lean toward authentic if verdict says so, unless strong evidence otherwise
+        // Default: trust the verdict, unless there is overwhelming evidence
         isDeepfake = false;
         finalConfidence = Math.max(confidence, 70);
       }
-    } 
-    // If no explicit verdict – decide by indicator counts & confidence thresholds
-    else {
-      if (fakeIndicatorCount > realIndicatorCount && fakeIndicatorCount > 1 && confidence < 65) {
+    } else {
+      // No explicit verdict
+      if (fakeIndicatorCount >= 3 && confidence < 65) {
         isDeepfake = true;
-        finalConfidence = Math.min(confidence, 40);
-      } else if (confidence < 35 && fakeIndicatorCount > 0) {
+        finalConfidence = Math.min(confidence, 35);
+      } else if (fakeIndicatorCount >= 1 && confidence < 40) {
         isDeepfake = true;
         finalConfidence = Math.min(confidence, 30);
       } else {
@@ -142,9 +141,9 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       }
     }
 
-    // Clamp
+    // Force clamp to normal range
     finalConfidence = Math.max(10, Math.min(99, finalConfidence));
-    // Scores for subsystems
+    // subsystem scores
     const baseScore = finalConfidence;
     const variance = 8;
 
