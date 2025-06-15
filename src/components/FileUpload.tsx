@@ -1,7 +1,7 @@
 
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { analyzeFile } from "../services/deepfakeDetection";
+import { supabase } from "../integrations/supabase/client";
 
 interface FileUploadProps {
   onAnalysisComplete: (result: any) => void;
@@ -11,7 +11,6 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [apiKey, setApiKey] = useState("AIzaSyAiCNoGguJCuM-2BcxrCLjQq6CfGO83hsc");
   const [error, setError] = useState<string | null>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -43,8 +42,8 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   };
 
   const handleAnalysis = async () => {
-    if (!uploadedFile || !apiKey.trim()) {
-      setError("Please select a file and enter your API key");
+    if (!uploadedFile) {
+      setError("Please select a file");
       return;
     }
 
@@ -53,8 +52,25 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     
     try {
       console.log('Analyzing file:', uploadedFile.name);
-      const result = await analyzeFile(uploadedFile, apiKey.trim());
-      onAnalysisComplete(result);
+      
+      // Convert file to base64
+      const fileBuffer = await uploadedFile.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      
+      // Call the secure edge function
+      const { data, error: functionError } = await supabase.functions.invoke('analyze-deepfake', {
+        body: {
+          file: base64,
+          fileName: uploadedFile.name,
+          fileType: uploadedFile.type
+        }
+      });
+
+      if (functionError) {
+        throw new Error(functionError.message);
+      }
+
+      onAnalysisComplete(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
       console.error('Analysis error:', err);
@@ -73,24 +89,6 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Upload Media for Analysis</h2>
-      
-      {/* API Key Input */}
-      <div>
-        <label htmlFor="api-key" className="block text-sm font-medium text-gray-700 mb-2">
-          Google Gemini API Key
-        </label>
-        <input
-          id="api-key"
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Enter your Gemini API key"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Your API key is used securely and not stored permanently
-        </p>
-      </div>
       
       {/* File Upload Area */}
       <div
@@ -112,7 +110,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
             <button 
               className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               onClick={handleAnalysis}
-              disabled={isAnalyzing || !apiKey.trim()}
+              disabled={isAnalyzing}
             >
               {isAnalyzing ? (
                 <>
