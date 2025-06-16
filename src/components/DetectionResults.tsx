@@ -1,4 +1,3 @@
-
 import { CheckCircle, AlertTriangle, Info, Eye, Clock, FileText, Download } from "lucide-react";
 import { useState } from "react";
 
@@ -383,31 +382,34 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
       .replace(/#{1,6}\s*/g, '') // Remove markdown headers
       .replace(/`{1,3}/g, '') // Remove code blocks
       .replace(/CONFIDENCE_SCORE:\s*\d+/i, '') // Remove confidence score line
+      .replace(/Confidence:\s*\d+\.?\d*%/gi, '') // Remove confidence percentages
+      .replace(/\d+\.?\d*%\s*confidence/gi, '') // Remove percentage confidence mentions
       .replace(/^\s*[-•]\s*/gm, '') // Remove bullet points
       .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
+      .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
       .trim();
   };
 
   const getDescriptiveAnalysis = (result: any) => {
-    const analysisType = result.isDeepfake ? "suspicious content" : "authentic content";
-    const processingDetails = `Our advanced AI model processed this ${result.fileType?.includes('image') ? 'image' : 'media'} using multi-layered analysis techniques`;
+    const mediaType = result.fileType?.includes('image') ? 'image' : 'media file';
+    const processingDetails = `Our advanced AI detection system analyzed this ${mediaType} using sophisticated multi-layered algorithms that examine various characteristics`;
     
     const keyFindings = [];
     
     // Extract key findings from the analysis scores
     Object.entries(result.analysis).forEach(([key, value]: [string, any]) => {
       if (value.status === 'suspicious') {
-        keyFindings.push(`${key} analysis revealed anomalies`);
+        keyFindings.push(`${key} analysis detected irregularities`);
       } else {
-        keyFindings.push(`${key} characteristics appear natural`);
+        keyFindings.push(`${key} patterns appear consistent with authentic content`);
       }
     });
 
     const technicalSummary = result.isDeepfake 
-      ? "The analysis detected patterns commonly associated with AI-generated or manipulated content, including potential inconsistencies in pixel-level features, lighting artifacts, or unnatural texture distributions."
-      : "The content exhibits natural characteristics consistent with authentic media, including realistic texture patterns, proper lighting consistency, and expected photographic artifacts.";
+      ? "The comprehensive analysis identified multiple indicators suggesting artificial generation or digital manipulation, including anomalies in pixel-level structures, inconsistent lighting patterns, and unnatural texture distributions that are characteristic of AI-generated content."
+      : "The thorough examination revealed characteristics consistent with authentic media, including natural texture variations, proper lighting consistency, expected compression artifacts, and organic visual patterns typical of genuine photographic content.";
 
-    return `${processingDetails}. Key findings include: ${keyFindings.join(', ')}. ${technicalSummary}`;
+    return `${processingDetails}. ${keyFindings.join(', ')}. ${technicalSummary}`;
   };
 
   if (!result) {
