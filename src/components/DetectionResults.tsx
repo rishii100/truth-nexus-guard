@@ -1,3 +1,4 @@
+
 import { CheckCircle, AlertTriangle, Info, Eye, Clock, FileText, Download } from "lucide-react";
 import { useState } from "react";
 
@@ -289,7 +290,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
               <div>
                 <div class="result-title">${status}</div>
                 <div class="result-details">
-                  Confidence: ${result.confidence.toFixed(1)}% | Processing time: ${result.processingTime}ms
+                  Processing time: ${result.processingTime}ms
                 </div>
               </div>
             </div>
@@ -387,6 +388,28 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
       .trim();
   };
 
+  const getDescriptiveAnalysis = (result: any) => {
+    const analysisType = result.isDeepfake ? "suspicious content" : "authentic content";
+    const processingDetails = `Our advanced AI model processed this ${result.fileType?.includes('image') ? 'image' : 'media'} using multi-layered analysis techniques`;
+    
+    const keyFindings = [];
+    
+    // Extract key findings from the analysis scores
+    Object.entries(result.analysis).forEach(([key, value]: [string, any]) => {
+      if (value.status === 'suspicious') {
+        keyFindings.push(`${key} analysis revealed anomalies`);
+      } else {
+        keyFindings.push(`${key} characteristics appear natural`);
+      }
+    });
+
+    const technicalSummary = result.isDeepfake 
+      ? "The analysis detected patterns commonly associated with AI-generated or manipulated content, including potential inconsistencies in pixel-level features, lighting artifacts, or unnatural texture distributions."
+      : "The content exhibits natural characteristics consistent with authentic media, including realistic texture patterns, proper lighting consistency, and expected photographic artifacts.";
+
+    return `${processingDetails}. Key findings include: ${keyFindings.join(', ')}. ${technicalSummary}`;
+  };
+
   if (!result) {
     return (
       <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -456,7 +479,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
         ))}
       </div>
 
-      {/* Clean AI Explanation */}
+      {/* Enhanced AI Explanation */}
       <div className="relative mb-6 overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5"></div>
         <div className="relative p-6">
@@ -469,14 +492,22 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-4">
                 <h4 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  AI Analysis Insights
+                  Detailed Analysis Report
                 </h4>
                 <div className="h-1 flex-1 bg-gradient-to-r from-blue-200 to-purple-200 rounded-full"></div>
               </div>
-              <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed font-medium text-base m-0 whitespace-pre-line">
-                  {cleanExplanationText(result.explanation)}
-                </p>
+              <div className="space-y-4">
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-gray-700 leading-relaxed font-medium text-base m-0">
+                    {getDescriptiveAnalysis(result)}
+                  </p>
+                </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <h5 className="font-semibold text-gray-900 mb-2">Technical Assessment:</h5>
+                  <p className="text-gray-700 leading-relaxed font-medium text-sm whitespace-pre-line">
+                    {cleanExplanationText(result.explanation)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
