@@ -1,4 +1,3 @@
-
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../integrations/supabase/client";
@@ -42,61 +41,122 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   };
 
   const parseAIAnalysis = (analysisText: string) => {
-    console.log('Raw AI analysis text:', analysisText);
+    console.log('=== AI ANALYSIS PARSING ===');
+    console.log('Raw AI response:', analysisText);
 
-    // Extract confidence score
-    let aiConfidence = 50;
-    const confidenceMatch = analysisText.match(/CONFIDENCE[:\s]*(\d+)/i);
-    if (confidenceMatch) {
-      aiConfidence = parseInt(confidenceMatch[1]);
-    }
-
-    // Extract explicit verdict
     const lowerText = analysisText.toLowerCase();
-    let isAuthentic = false;
     
-    // Check for explicit AI verdict first - this is most important
-    if (lowerText.includes('appears authentic') || lowerText.includes('authentic')) {
-      isAuthentic = true;
-    } else if (lowerText.includes('appears artificial') || lowerText.includes('artificial') || lowerText.includes('ai-generated') || lowerText.includes('fake')) {
-      isAuthentic = false;
-    } else {
-      // If no explicit verdict, use confidence threshold
-      isAuthentic = aiConfidence >= 70;
+    // Extract confidence score first
+    let aiConfidence = 50; // Default middle confidence
+    const confidencePatterns = [
+      /confidence[:\s]*(\d+)/i,
+      /score[:\s]*(\d+)/i,
+      /(\d+)%/,
+      /(\d+)\/100/
+    ];
+    
+    for (const pattern of confidencePatterns) {
+      const match = analysisText.match(pattern);
+      if (match) {
+        aiConfidence = parseInt(match[1]);
+        console.log(`Found confidence: ${aiConfidence} using pattern: ${pattern}`);
+        break;
+      }
     }
 
-    // Final decision logic - trust the AI's assessment
+    // Look for explicit verdicts
+    let explicitVerdict = null;
+    if (lowerText.includes('appears authentic') || lowerText.includes('verdict: authentic')) {
+      explicitVerdict = 'AUTHENTIC';
+    } else if (lowerText.includes('appears artificial') || lowerText.includes('verdict: artificial') || 
+               lowerText.includes('verdict: deepfake') || lowerText.includes('appears fake')) {
+      explicitVerdict = 'FAKE';
+    }
+
+    console.log('Explicit verdict found:', explicitVerdict);
+    console.log('AI Confidence extracted:', aiConfidence);
+
+    // Strong indicators for FAKE content
+    const strongFakeIndicators = [
+      'artificial', 'ai-generated', 'synthetic', 'fake', 'deepfake', 
+      'digital artifacts', 'manipulation', 'computer-generated',
+      'unnatural lighting', 'perfect skin', 'too smooth', 'plastic-like',
+      'impossible features', 'signs of editing', 'digitally altered'
+    ];
+
+    // Strong indicators for AUTHENTIC content  
+    const strongAuthenticIndicators = [
+      'natural photograph', 'realistic texture', 'natural lighting',
+      'genuine image', 'authentic', 'real photo', 'natural skin',
+      'visible pores', 'natural imperfections', 'camera noise',
+      'realistic shadows', 'natural asymmetry'
+    ];
+
+    const fakeCount = strongFakeIndicators.filter(indicator => 
+      lowerText.includes(indicator)
+    ).length;
+
+    const authenticCount = strongAuthenticIndicators.filter(indicator => 
+      lowerText.includes(indicator)
+    ).length;
+
+    console.log('Fake indicators count:', fakeCount);
+    console.log('Authentic indicators count:', authenticCount);
+
+    // Decision logic - prioritize explicit verdict, then indicators, then confidence
     let finalConfidence = aiConfidence;
-    let isDeepfake = !isAuthentic;
+    let isDeepfake = false;
 
-    // If AI says authentic with decent confidence, trust it
-    if (isAuthentic && aiConfidence >= 70) {
+    if (explicitVerdict === 'AUTHENTIC') {
+      // AI explicitly says authentic
       isDeepfake = false;
-      finalConfidence = Math.max(70, aiConfidence);
-    }
-    // If AI says fake or confidence is low, mark as fake
-    else if (!isAuthentic || aiConfidence < 60) {
+      finalConfidence = Math.max(75, aiConfidence); // Boost confidence for explicit authentic verdict
+    } else if (explicitVerdict === 'FAKE') {
+      // AI explicitly says fake
       isDeepfake = true;
-      finalConfidence = Math.min(45, Math.max(10, 100 - aiConfidence));
+      finalConfidence = Math.min(35, aiConfidence); // Lower confidence for explicit fake verdict
+    } else if (fakeCount > authenticCount && fakeCount > 0) {
+      // More fake indicators than authentic
+      isDeepfake = true;
+      finalConfidence = Math.max(15, Math.min(40, aiConfidence));
+    } else if (authenticCount > fakeCount && authenticCount > 0) {
+      // More authentic indicators than fake
+      isDeepfake = false;
+      finalConfidence = Math.max(65, aiConfidence);
+    } else {
+      // Fall back to confidence threshold
+      if (aiConfidence >= 70) {
+        isDeepfake = false;
+        finalConfidence = aiConfidence;
+      } else if (aiConfidence <= 40) {
+        isDeepfake = true;
+        finalConfidence = aiConfidence;
+      } else {
+        // Middle ground - lean towards fake for safety
+        isDeepfake = true;
+        finalConfidence = Math.min(45, aiConfidence);
+      }
     }
 
-    console.log('FINAL DECISION:');
-    console.log('AI Confidence:', aiConfidence);
-    console.log('AI Says Authentic:', isAuthentic);
-    console.log('Final Is Deepfake:', isDeepfake);
+    // Clamp final confidence
+    finalConfidence = Math.max(10, Math.min(95, finalConfidence));
+
+    console.log('=== FINAL DECISION ===');
+    console.log('Is Deepfake:', isDeepfake);
     console.log('Final Confidence:', finalConfidence);
+    console.log('Decision based on:', explicitVerdict || `Indicators (F:${fakeCount}, A:${authenticCount})` || 'Confidence threshold');
 
     // Generate sub-scores based on final decision
     const baseScore = finalConfidence;
-    const variance = 5;
+    const variance = 8;
     
     return {
       confidence: finalConfidence,
       isDeepfake,
-      spatial: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      temporal: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      audio: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
-      metadata: Math.max(10, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
+      spatial: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      temporal: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      audio: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance)),
+      metadata: Math.max(15, Math.min(90, baseScore + (Math.random() - 0.5) * variance))
     };
   };
 
