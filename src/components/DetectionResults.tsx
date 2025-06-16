@@ -422,7 +422,7 @@ const DetectionResults = ({ result }: DetectionResultsProps) => {
               {result.isDeepfake ? 'Potential Deepfake Detected' : 'Content Appears Authentic'}
             </h3>
             <p className="text-sm text-gray-600">
-              Confidence: {result.confidence.toFixed(1)}% | Processing time: {result.processingTime}ms
+              Processing time: {result.processingTime}ms
             </p>
           </div>
         </div>
