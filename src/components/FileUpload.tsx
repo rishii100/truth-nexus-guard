@@ -1,6 +1,7 @@
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../integrations/supabase/client";
+import { useAnalysisQueue } from "../hooks/useAnalysisQueue";
 
 interface FileUploadProps {
   onAnalysisComplete: (result: any) => void;
@@ -11,6 +12,9 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentQueueId, setCurrentQueueId] = useState<string | null>(null);
+
+  const { addToQueue, updateQueueItem, completeQueueItem } = useAnalysisQueue();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -233,6 +237,14 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     });
   };
 
+  const simulateProgress = async (queueId: string) => {
+    const steps = [20, 40, 60, 80, 95];
+    for (const progress of steps) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await updateQueueItem(queueId, { status: 'processing', progress });
+    }
+  };
+
   const handleAnalysis = async () => {
     if (!uploadedFile) {
       setError("Please select a file");
@@ -247,8 +259,21 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     setIsAnalyzing(true);
     setError(null);
     
+    // Add to queue
+    const queueItem = await addToQueue(uploadedFile.name, uploadedFile.type);
+    if (!queueItem) {
+      setError("Failed to add analysis to queue");
+      setIsAnalyzing(false);
+      return;
+    }
+    
+    setCurrentQueueId(queueItem.id);
+    
     try {
       console.log('Starting analysis for file:', uploadedFile.name);
+      
+      // Update status to processing
+      await updateQueueItem(queueItem.id, { status: 'processing', progress: 10 });
       
       // For images, do direct analysis
       if (uploadedFile.type.startsWith('image/')) {
@@ -257,6 +282,9 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
         
         img.onload = async () => {
           try {
+            // Simulate progress updates
+            await simulateProgress(queueItem.id);
+            
             const analysisResult = await analyzeImageDirectly(img);
             
             const transformedResult = {
@@ -265,24 +293,31 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
               timestamp: new Date().toISOString(),
               confidence: analysisResult.confidence,
               isDeepfake: analysisResult.isDeepfake,
-              processingTime: 1500, // Simulated processing time
+              processingTime: 1500,
               analysis: analysisResult.analysis,
               explanation: analysisResult.explanation
             };
+            
+            // Complete the queue item
+            await completeQueueItem(queueItem.id, true);
             
             onAnalysisComplete(transformedResult);
             URL.revokeObjectURL(imageUrl);
           } catch (err) {
             console.error('Direct analysis error:', err);
+            await completeQueueItem(queueItem.id, false);
             setError('Failed to analyze image');
           } finally {
             setIsAnalyzing(false);
+            setCurrentQueueId(null);
           }
         };
         
-        img.onerror = () => {
+        img.onerror = async () => {
+          await completeQueueItem(queueItem.id, false);
           setError('Failed to load image');
           setIsAnalyzing(false);
+          setCurrentQueueId(null);
           URL.revokeObjectURL(imageUrl);
         };
         
@@ -307,7 +342,13 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       
       console.log('File converted to base64, calling edge function...');
       
+      // Update progress
+      await updateQueueItem(queueItem.id, { status: 'processing', progress: 30 });
+      
       const startTime = Date.now();
+      
+      // Simulate progress during API call
+      simulateProgress(queueItem.id);
       
       // Call the edge function for non-image files
       const { data, error: functionError } = await supabase.functions.invoke('analyze-deepfake', {
@@ -323,10 +364,12 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
 
       if (functionError) {
         console.error('Edge function error:', functionError);
+        await completeQueueItem(queueItem.id, false);
         throw new Error(functionError.message || 'Analysis failed');
       }
 
       if (!data) {
+        await completeQueueItem(queueItem.id, false);
         throw new Error('No response from analysis service');
       }
 
@@ -354,14 +397,22 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
         explanation: data.analysis || 'Analysis completed successfully'
       };
       
+      // Complete the queue item
+      await completeQueueItem(queueItem.id, true);
+      
       onAnalysisComplete(transformedResult);
       
     } catch (err) {
       console.error('Analysis error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Analysis failed';
       setError(errorMessage);
+      
+      if (currentQueueId) {
+        await completeQueueItem(currentQueueId, false);
+      }
     } finally {
       setIsAnalyzing(false);
+      setCurrentQueueId(null);
     }
   };
 
@@ -443,6 +494,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
         <p>Supported formats: MP4, AVI, MOV, JPG, PNG, MP3, WAV</p>
         <p>All uploads are processed securely and deleted after analysis</p>
         <p>Images are analyzed using advanced pixel-level detection algorithms</p>
+        <p className="text-blue-600 font-medium">✨ Now with real-time queue tracking!</p>
       </div>
     </div>
   );
