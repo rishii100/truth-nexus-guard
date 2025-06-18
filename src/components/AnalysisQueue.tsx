@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
@@ -161,6 +162,7 @@ const AnalysisQueue = () => {
     );
   };
 
+  // ... keep existing code (loading state)
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
