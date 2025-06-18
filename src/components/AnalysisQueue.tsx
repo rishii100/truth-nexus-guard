@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
@@ -51,6 +50,7 @@ const AnalysisQueue = () => {
           return;
         }
 
+        console.log('Fetched queue items:', data); // Debug log
         setQueueItems(data || []);
       } catch (err) {
         console.error('Failed to fetch queue items:', err);
@@ -132,8 +132,10 @@ const AnalysisQueue = () => {
       return null;
     }
 
-    const isDeepfake = item.is_deepfake;
-    const confidence = item.confidence || 0;
+    console.log(`Item ${item.file_name}: is_deepfake=${item.is_deepfake}, confidence=${item.confidence}`); // Debug log
+
+    // Fix the logic - if is_deepfake is true, then it's a deepfake, otherwise it's authentic
+    const isDeepfake = item.is_deepfake === true;
 
     return (
       <div className="flex items-center gap-2 mt-2">
@@ -143,9 +145,6 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-red-700">
               Deepfake Detected
             </span>
-            <span className="text-xs text-red-600">
-              ({confidence}% confidence)
-            </span>
           </>
         ) : (
           <>
@@ -153,16 +152,13 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-green-700">
               Authentic
             </span>
-            <span className="text-xs text-green-600">
-              ({confidence}% confidence)
-            </span>
           </>
         )}
       </div>
     );
   };
 
-  // ... keep existing code (loading state)
+  // ... keep existing code (loading state and empty state)
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
