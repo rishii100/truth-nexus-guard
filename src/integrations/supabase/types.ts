@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -9,7 +10,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      analysis_queue: {
+        Row: {
+          analysis_result: Json | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          explanation: string | null
+          file_name: string
+          file_type: string
+          id: string
+          is_deepfake: boolean | null
+          progress: number | null
+          status: string
+          updated_at: string
+          user_session: string
+        }
+        Insert: {
+          analysis_result?: Json | null
+          completed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          explanation?: string | null
+          file_name: string
+          file_type: string
+          id?: string
+          is_deepfake?: boolean | null
+          progress?: number | null
+          status?: string
+          updated_at?: string
+          user_session: string
+        }
+        Update: {
+          analysis_result?: Json | null
+          completed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          explanation?: string | null
+          file_name?: string
+          file_type?: string
+          id?: string
+          is_deepfake?: boolean | null
+          progress?: number | null
+          status?: string
+          updated_at?: string
+          user_session?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
