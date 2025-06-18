@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
@@ -7,12 +6,16 @@ interface QueueItem {
   id: string;
   file_name: string;
   file_type: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
-  progress: number;
+  status: string;
+  progress: number | null;
   created_at: string;
   updated_at: string;
+  completed_at: string | null;
   is_deepfake: boolean | null;
   confidence: number | null;
+  analysis_result: any;
+  explanation: string | null;
+  user_session: string;
 }
 
 const AnalysisQueue = () => {
@@ -217,7 +220,7 @@ const AnalysisQueue = () => {
               </span>
             </div>
             
-            {item.status === 'processing' && (
+            {item.status === 'processing' && item.progress && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs text-gray-500 mb-1">
                   <span>Progress</span>
