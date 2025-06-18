@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { Clock, CheckCircle, XCircle, Loader2, FileText } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
 
 interface QueueItem {
   id: string;
@@ -11,6 +11,8 @@ interface QueueItem {
   progress: number;
   created_at: string;
   updated_at: string;
+  is_deepfake: boolean | null;
+  confidence: number | null;
 }
 
 const AnalysisQueue = () => {
@@ -121,6 +123,41 @@ const AnalysisQueue = () => {
     }
   };
 
+  const getDetectionResult = (item: QueueItem) => {
+    if (item.status !== 'completed' || item.is_deepfake === null) {
+      return null;
+    }
+
+    const isDeepfake = item.is_deepfake;
+    const confidence = item.confidence || 0;
+
+    return (
+      <div className="flex items-center gap-2 mt-2">
+        {isDeepfake ? (
+          <>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <span className="text-xs font-medium text-red-700">
+              Deepfake Detected
+            </span>
+            <span className="text-xs text-red-600">
+              ({confidence}% confidence)
+            </span>
+          </>
+        ) : (
+          <>
+            <Shield className="h-4 w-4 text-green-500" />
+            <span className="text-xs font-medium text-green-700">
+              Authentic
+            </span>
+            <span className="text-xs text-green-600">
+              ({confidence}% confidence)
+            </span>
+          </>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
@@ -194,6 +231,8 @@ const AnalysisQueue = () => {
                 </div>
               </div>
             )}
+
+            {getDetectionResult(item)}
             
             <div className="mt-2 text-xs text-gray-400">
               {new Date(item.created_at).toLocaleTimeString()}
