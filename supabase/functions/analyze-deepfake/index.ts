@@ -44,7 +44,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Analyzing file: ${fileName} (${fileType}) - Queue ID: ${queueId}`);
+    console.log(`🔍 STARTING ANALYSIS: ${fileName} (${fileType}) - Queue ID: ${queueId}`);
     
     // Update queue status to processing
     await supabase
@@ -60,36 +60,44 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid or empty file data");
     }
     
-    // Simple but effective prompt for deepfake detection
-    const analysisPrompt = `You are an expert deepfake detection system. Analyze this image and determine if it's REAL or AI-GENERATED/FAKE.
+    // Enhanced prompt specifically for deepfake detection
+    const analysisPrompt = `You are an expert deepfake detection AI. Analyze this image VERY CAREFULLY for signs of AI generation or deepfake manipulation.
 
-Look for these key indicators:
+CRITICAL INSTRUCTIONS:
+1. You MUST respond with EXACTLY this format:
+RESULT: [REAL or FAKE]
+CONFIDENCE: [number from 1-100]
+EXPLANATION: [your detailed analysis]
 
-FAKE/AI-GENERATED signs:
-- Perfect/unnatural skin texture (too smooth, waxy, no pores)
-- Unnatural lighting or shadows
-- Weird artifacts around edges, especially hair/face boundaries  
-- Too-perfect symmetry in facial features
-- Unnatural eye reflections or pupil alignment
+2. Mark as FAKE if you see ANY of these signs:
+- Unnatural skin texture (too smooth, plastic-like, no visible pores)
+- Perfect teeth that look artificially generated
+- Unnatural lighting or shadows that don't match
+- Digital artifacts around face/hair boundaries
+- Eyes with strange reflections or misaligned pupils
 - Background inconsistencies or artificial blur
+- Face that looks "too perfect" or artificially enhanced
+- Any signs of digital manipulation or AI generation
 
-REAL photo signs:
-- Natural skin texture with visible pores/imperfections
+3. Mark as REAL only if:
+- Natural skin texture with visible imperfections/pores
 - Realistic lighting and shadows
 - Natural facial asymmetry
-- Camera noise/grain patterns
-- Natural imperfections (blemishes, wrinkles)
+- Realistic background interactions
+- Normal camera grain/noise patterns
+- Genuine human imperfections
 
-RESPOND WITH EXACTLY THIS FORMAT:
-RESULT: [REAL or FAKE]  
-CONFIDENCE: [number 1-100]
-EXPLANATION: [brief explanation of key indicators found]`;
+BE VERY STRICT - if there's ANY doubt, mark as FAKE.
+
+Analyze this image now:`;
     
     // Update progress
     await supabase
       .from('analysis_queue')
       .update({ progress: 50 })
       .eq('id', queueId);
+    
+    console.log(`📡 Calling Gemini API for analysis...`);
     
     // Call Google Gemini API
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -116,7 +124,7 @@ EXPLANATION: [brief explanation of key indicators found]`;
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
-      console.error(`Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`, errorText);
+      console.error(`❌ Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`, errorText);
       throw new Error(`Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`);
     }
 
@@ -126,29 +134,29 @@ EXPLANATION: [brief explanation of key indicators found]`;
     const analysisText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!analysisText) {
-      console.error('Invalid response structure:', result);
+      console.error('❌ Invalid response structure:', result);
       throw new Error("Invalid response from AI analysis service");
     }
     
-    console.log('Raw AI analysis:', analysisText);
+    console.log(`🤖 RAW AI RESPONSE:\n${analysisText}\n`);
     
-    // Parse the AI response more robustly
+    // Parse the AI response with improved regex
     const resultMatch = analysisText.match(/RESULT:\s*(REAL|FAKE)/i);
     const confidenceMatch = analysisText.match(/CONFIDENCE:\s*(\d+)/i);
-    const explanationMatch = analysisText.match(/EXPLANATION:\s*(.*?)(?=\n|$)/is);
+    const explanationMatch = analysisText.match(/EXPLANATION:\s*(.*?)(?=\n\n|$)/is);
     
     const detectionResult = resultMatch ? resultMatch[1].toUpperCase() : 'UNKNOWN';
     const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
     const explanation = explanationMatch ? explanationMatch[1].trim() : analysisText;
     
-    // Determine if it's a deepfake - FAKE means deepfake
+    // CRITICAL: Determine if it's a deepfake - FAKE means deepfake
     const isDeepfake = detectionResult === 'FAKE';
     
-    console.log(`Analysis Results:
-    - Detection: ${detectionResult}
+    console.log(`🎯 PARSED RESULTS:
+    - Raw Detection: ${detectionResult}
     - Is Deepfake: ${isDeepfake}  
     - Confidence: ${confidence}
-    - Explanation: ${explanation}`);
+    - Explanation: ${explanation.substring(0, 100)}...`);
     
     // Create structured analysis result
     const analysisResult = {
@@ -163,16 +171,14 @@ EXPLANATION: [brief explanation of key indicators found]`;
       status: 'completed'
     };
 
-    console.log('Saving to database:', {
-      status: 'completed',
-      progress: 100,
-      is_deepfake: isDeepfake,
-      confidence: confidence,
-      analysis_result: analysisResult
-    });
+    console.log(`💾 SAVING TO DATABASE:
+    - Queue ID: ${queueId}
+    - is_deepfake: ${isDeepfake}
+    - confidence: ${confidence}
+    - analysis_result: ${JSON.stringify(analysisResult, null, 2)}`);
 
-    // Update the queue item with results
-    const { error: updateError } = await supabase
+    // Update the queue item with results - CRITICAL DATABASE UPDATE
+    const { data: updateData, error: updateError } = await supabase
       .from('analysis_queue')
       .update({
         status: 'completed',
@@ -183,14 +189,34 @@ EXPLANATION: [brief explanation of key indicators found]`;
         analysis_result: analysisResult,
         explanation: explanation
       })
-      .eq('id', queueId);
+      .eq('id', queueId)
+      .select('*');
 
     if (updateError) {
-      console.error('Database update error:', updateError);
+      console.error('❌ DATABASE UPDATE ERROR:', updateError);
       throw new Error('Failed to update analysis results in database');
     }
 
-    console.log('✅ Analysis completed and saved successfully');
+    console.log(`✅ DATABASE UPDATE SUCCESS:`, updateData);
+
+    // Verify the data was saved correctly
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('analysis_queue')
+      .select('*')
+      .eq('id', queueId)
+      .single();
+
+    if (verifyError) {
+      console.error('❌ VERIFICATION ERROR:', verifyError);
+    } else {
+      console.log(`🔍 VERIFICATION - Data in database:
+      - is_deepfake: ${verifyData.is_deepfake}
+      - confidence: ${verifyData.confidence}
+      - analysis_result exists: ${!!verifyData.analysis_result}
+      - analysis_result.isDeepfake: ${verifyData.analysis_result?.isDeepfake}`);
+    }
+
+    console.log('✅ Analysis completed successfully');
 
     return new Response(JSON.stringify(analysisResult), {
       status: 200,
@@ -200,7 +226,7 @@ EXPLANATION: [brief explanation of key indicators found]`;
       },
     });
   } catch (error: any) {
-    console.error("❌ Error in analyze-deepfake function:", error);
+    console.error("❌ ERROR in analyze-deepfake function:", error);
     
     // Try to update the queue item as failed
     try {
@@ -221,7 +247,7 @@ EXPLANATION: [brief explanation of key indicators found]`;
         }
       }
     } catch (updateError) {
-      console.error('Failed to update queue item as failed:', updateError);
+      console.error('❌ Failed to update queue item as failed:', updateError);
     }
     
     return new Response(

@@ -51,7 +51,7 @@ const AnalysisQueue = () => {
           return;
         }
 
-        console.log('Fetched queue items:', data); // Debug log
+        console.log('📋 Fetched queue items:', data);
         setQueueItems(data || []);
       } catch (err) {
         console.error('Failed to fetch queue items:', err);
@@ -74,7 +74,7 @@ const AnalysisQueue = () => {
           filter: `user_session=eq.${sessionId}`
         },
         (payload) => {
-          console.log('Real-time queue update:', payload);
+          console.log('🔄 Real-time queue update:', payload);
           
           if (payload.eventType === 'INSERT') {
             setQueueItems(prev => [payload.new as QueueItem, ...prev.slice(0, 9)]);
@@ -133,31 +133,41 @@ const AnalysisQueue = () => {
       return null;
     }
 
-    console.log(`🔍 Checking detection for ${item.file_name}:`, {
-      is_deepfake: item.is_deepfake,
-      analysis_result: item.analysis_result
-    });
+    console.log(`🔍 ANALYZING DETECTION for ${item.file_name}:`);
+    console.log(`- Database is_deepfake: ${item.is_deepfake}`);
+    console.log(`- Database confidence: ${item.confidence}`);
+    console.log(`- analysis_result:`, item.analysis_result);
 
     let isDeepfake = false;
     
-    // First check: analysis_result.isDeepfake (primary source)
+    // Strategy 1: Check analysis_result.isDeepfake (most reliable)
     if (item.analysis_result && typeof item.analysis_result === 'object') {
       if ('isDeepfake' in item.analysis_result) {
         isDeepfake = item.analysis_result.isDeepfake === true;
         console.log(`✅ Using analysis_result.isDeepfake: ${isDeepfake}`);
-      } else if ('result' in item.analysis_result && item.analysis_result.result === 'FAKE') {
-        isDeepfake = true;
-        console.log(`✅ Using analysis_result.result=FAKE: ${isDeepfake}`);
+      } else if ('result' in item.analysis_result) {
+        // Strategy 2: Check analysis_result.result
+        isDeepfake = item.analysis_result.result === 'FAKE';
+        console.log(`✅ Using analysis_result.result=${item.analysis_result.result}: ${isDeepfake}`);
       }
     }
     
-    // Fallback to database column
+    // Strategy 3: Fallback to database column
     if (item.analysis_result === null || item.analysis_result === undefined) {
       isDeepfake = item.is_deepfake === true;
       console.log(`⚠️ Fallback to is_deepfake column: ${isDeepfake}`);
     }
 
-    console.log(`🎯 Final result for ${item.file_name}: ${isDeepfake ? 'DEEPFAKE' : 'AUTHENTIC'}`);
+    // Strategy 4: Check explanation text as last resort
+    if (!isDeepfake && item.explanation) {
+      const explanationLower = item.explanation.toLowerCase();
+      if (explanationLower.includes('fake') || explanationLower.includes('deepfake') || explanationLower.includes('artificial')) {
+        isDeepfake = true;
+        console.log(`🔍 Detected deepfake from explanation text: ${isDeepfake}`);
+      }
+    }
+
+    console.log(`🎯 FINAL DECISION for ${item.file_name}: ${isDeepfake ? 'DEEPFAKE' : 'AUTHENTIC'}`);
 
     return (
       <div className="flex items-center gap-2 mt-2">
@@ -167,6 +177,11 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-red-700">
               Deepfake Detected
             </span>
+            {item.confidence && (
+              <span className="text-xs text-gray-500">
+                ({item.confidence}% confidence)
+              </span>
+            )}
           </>
         ) : (
           <>
@@ -174,6 +189,11 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-green-700">
               Authentic
             </span>
+            {item.confidence && (
+              <span className="text-xs text-gray-500">
+                ({item.confidence}% confidence)
+              </span>
+            )}
           </>
         )}
       </div>
