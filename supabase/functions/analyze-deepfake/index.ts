@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,7 @@ interface AnalyzeRequest {
   file: string; // base64 encoded file
   fileName: string;
   fileType: string;
+  queueId: string;
   enhancedPrompt?: boolean;
 }
 
@@ -22,18 +24,36 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const requestBody = await req.json();
-    const { file, fileName, fileType, enhancedPrompt }: AnalyzeRequest = requestBody;
+    const { file, fileName, fileType, queueId, enhancedPrompt }: AnalyzeRequest = requestBody;
     
-    if (!file || !fileName || !fileType) {
-      throw new Error("Missing required fields: file, fileName, or fileType");
+    if (!file || !fileName || !fileType || !queueId) {
+      throw new Error("Missing required fields: file, fileName, fileType, or queueId");
     }
     
     const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY not configured");
     }
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Supabase configuration missing");
+    }
 
-    console.log(`Analyzing file: ${fileName} (${fileType})`);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    console.log(`Analyzing file: ${fileName} (${fileType}) - Queue ID: ${queueId}`);
+    
+    // Update queue status to processing
+    await supabase
+      .from('analysis_queue')
+      .update({ 
+        status: 'processing',
+        progress: 10 
+      })
+      .eq('id', queueId);
     
     // Validate base64 string
     if (!file || file.length === 0) {
@@ -73,13 +93,21 @@ ANALYSIS PROTOCOL:
 4. Look for camera/photographic artifacts - grain, slight imperfections
 5. Check background consistency and realistic depth
 
-RESPONSE FORMAT:
-- Start with "CONFIDENCE: [10-90]"
-- State "APPEARS AUTHENTIC" for real photos or "APPEARS ARTIFICIAL" for AI-generated
-- List specific evidence that supports your conclusion
-- Be thorough and technical in your analysis
+RESPONSE FORMAT - MUST BE EXACTLY THIS FORMAT:
+CONFIDENCE: [number between 10-90]
+RESULT: [either "AUTHENTIC" or "DEEPFAKE"]
+EVIDENCE: [detailed technical explanation of your findings]
 
-IMPORTANT: Real photographs should score 70+ unless there are clear manipulation signs. Only score below 60 if you find definitive AI generation indicators.`;
+IMPORTANT: 
+- If confidence is 60 or above, classify as AUTHENTIC
+- If confidence is below 60, classify as DEEPFAKE
+- Be thorough and technical in your analysis`;
+    
+    // Update progress
+    await supabase
+      .from('analysis_queue')
+      .update({ progress: 50 })
+      .eq('id', queueId);
     
     // Call Google Gemini API
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -120,16 +148,54 @@ IMPORTANT: Real photographs should score 70+ unless there are clear manipulation
       throw new Error("Invalid response from AI analysis service");
     }
     
+    console.log('Raw analysis text:', analysisText);
+    
+    // Parse the structured response
+    const confidenceMatch = analysisText.match(/CONFIDENCE:\s*(\d+)/i);
+    const resultMatch = analysisText.match(/RESULT:\s*(AUTHENTIC|DEEPFAKE)/i);
+    const evidenceMatch = analysisText.match(/EVIDENCE:\s*(.*)/is);
+    
+    const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
+    const detectionResult = resultMatch ? resultMatch[1].toUpperCase() : 'UNKNOWN';
+    const evidence = evidenceMatch ? evidenceMatch[1].trim() : analysisText;
+    
+    const isDeepfake = detectionResult === 'DEEPFAKE';
+    
+    console.log(`Parsed results: confidence=${confidence}, result=${detectionResult}, isDeepfake=${isDeepfake}`);
+    
     // Create a structured response
     const analysisResult = {
       fileName,
       fileType,
       timestamp: new Date().toISOString(),
-      analysis: analysisText,
+      confidence,
+      result: detectionResult,
+      isDeepfake,
+      evidence,
+      rawAnalysis: analysisText,
       status: 'completed'
     };
 
-    console.log('Analysis completed successfully');
+    // Update the queue item with results
+    const { error: updateError } = await supabase
+      .from('analysis_queue')
+      .update({
+        status: 'completed',
+        progress: 100,
+        completed_at: new Date().toISOString(),
+        is_deepfake: isDeepfake,
+        confidence: confidence,
+        analysis_result: analysisResult,
+        explanation: evidence
+      })
+      .eq('id', queueId);
+
+    if (updateError) {
+      console.error('Error updating queue item:', updateError);
+      throw new Error('Failed to update analysis results');
+    }
+
+    console.log('Analysis completed successfully and stored in database');
 
     return new Response(JSON.stringify(analysisResult), {
       status: 200,
@@ -140,6 +206,28 @@ IMPORTANT: Real photographs should score 70+ unless there are clear manipulation
     });
   } catch (error: any) {
     console.error("Error in analyze-deepfake function:", error);
+    
+    // Try to update the queue item as failed if we have the queueId
+    const requestBody = await req.json().catch(() => ({}));
+    if (requestBody.queueId) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          await supabase
+            .from('analysis_queue')
+            .update({
+              status: 'failed',
+              explanation: error.message || 'Unknown error occurred'
+            })
+            .eq('id', requestBody.queueId);
+        }
+      } catch (updateError) {
+        console.error('Failed to update queue item as failed:', updateError);
+      }
+    }
     
     // Return a proper error response
     return new Response(

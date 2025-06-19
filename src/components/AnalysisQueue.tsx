@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
@@ -132,21 +133,26 @@ const AnalysisQueue = () => {
       return null;
     }
 
-    console.log(`Item ${item.file_name}: is_deepfake=${item.is_deepfake}, analysis_result:`, item.analysis_result); // Debug log
+    console.log(`Item ${item.file_name}:`, {
+      is_deepfake: item.is_deepfake,
+      analysis_result: item.analysis_result
+    });
 
-    // First check if we have analysis_result with isDeepfake property
+    // Check multiple sources for the deepfake detection result
     let isDeepfake = false;
     
+    // Priority 1: Check analysis_result.isDeepfake
     if (item.analysis_result && typeof item.analysis_result === 'object') {
-      // Check if analysis_result has isDeepfake property
       if ('isDeepfake' in item.analysis_result) {
         isDeepfake = item.analysis_result.isDeepfake === true;
         console.log(`Using analysis_result.isDeepfake: ${isDeepfake}`);
+      } else if ('result' in item.analysis_result) {
+        // Priority 2: Check analysis_result.result
+        isDeepfake = item.analysis_result.result === 'DEEPFAKE';
+        console.log(`Using analysis_result.result: ${item.analysis_result.result} -> ${isDeepfake}`);
       }
-    }
-    
-    // Fallback to is_deepfake column if analysis_result doesn't have the info
-    if (!item.analysis_result || !('isDeepfake' in item.analysis_result)) {
+    } else {
+      // Priority 3: Fallback to is_deepfake column
       isDeepfake = item.is_deepfake === true;
       console.log(`Using is_deepfake column: ${isDeepfake}`);
     }
