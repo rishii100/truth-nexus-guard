@@ -60,48 +60,30 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid or empty file data");
     }
     
-    // COMPLETELY REVISED PROMPT - More precise and technical
-    const analysisPrompt = `You are a professional deepfake detection expert. Analyze this image with extreme precision to determine if it's REAL or AI-GENERATED.
+    // Simple but effective prompt for deepfake detection
+    const analysisPrompt = `You are an expert deepfake detection system. Analyze this image and determine if it's REAL or AI-GENERATED/FAKE.
 
-CRITICAL ANALYSIS FRAMEWORK:
+Look for these key indicators:
 
-FOR REAL PHOTOGRAPHS (Score 70-90), look for ALL of these:
-✓ NATURAL SKIN TEXTURE: Visible pores, minor blemishes, realistic skin grain
-✓ NATURAL LIGHTING: Consistent shadows, realistic light fall-off, environmental matching
-✓ FACIAL ASYMMETRY: Real faces have subtle asymmetry - one eye slightly different, uneven features
-✓ NATURAL IMPERFECTIONS: Small scars, wrinkles, uneven skin tone, realistic aging
-✓ CAMERA ARTIFACTS: Natural grain, slight blur, realistic depth of field
-✓ HAIR TEXTURE: Individual strands, natural flow, realistic highlights
-✓ EYE DETAILS: Natural reflections matching environment, slight bloodshot, natural iris patterns
-✓ FABRIC/CLOTHING: Realistic textures, natural wrinkles, proper material behavior
-✓ BACKGROUND INTERACTION: Natural depth, realistic perspective, environmental consistency
+FAKE/AI-GENERATED signs:
+- Perfect/unnatural skin texture (too smooth, waxy, no pores)
+- Unnatural lighting or shadows
+- Weird artifacts around edges, especially hair/face boundaries  
+- Too-perfect symmetry in facial features
+- Unnatural eye reflections or pupil alignment
+- Background inconsistencies or artificial blur
 
-FOR AI-GENERATED/FAKE CONTENT (Score 10-40), look for ANY of these:
-✗ PERFECT SKIN: Overly smooth, plastic-like, waxy appearance, no visible pores
-✗ UNNATURAL LIGHTING: Impossible light sources, inconsistent shadows, artificial glow
-✗ PERFECT SYMMETRY: Impossibly symmetrical features, too perfect proportions
-✗ DIGITAL ARTIFACTS: Weird edges around face/hair, color bleeding, compression artifacts
-✗ UNNATURAL EYES: Perfect alignment, identical pupils, unnatural reflections
-✗ HAIR ANOMALIES: Painted look, unnatural flow, missing individual strands
-✗ BACKGROUND ISSUES: Blurred inconsistencies, impossible perspectives, artificial bokeh
-✗ OVERALL PERFECTION: Too polished, lacks natural randomness of real photography
+REAL photo signs:
+- Natural skin texture with visible pores/imperfections
+- Realistic lighting and shadows
+- Natural facial asymmetry
+- Camera noise/grain patterns
+- Natural imperfections (blemishes, wrinkles)
 
-ANALYSIS PROTOCOL:
-1. Examine skin texture closely - real skin has pores, minor imperfections, natural variation
-2. Check facial symmetry - real faces are naturally asymmetric
-3. Analyze lighting consistency - does it match the environment?
-4. Look for camera/photographic artifacts - grain, slight imperfections
-5. Check background consistency and realistic depth
-
-RESPONSE FORMAT - MUST BE EXACTLY THIS FORMAT:
-CONFIDENCE: [number between 10-90]
-RESULT: [either "AUTHENTIC" or "DEEPFAKE"]
-EVIDENCE: [detailed technical explanation of your findings]
-
-IMPORTANT: 
-- If confidence is 60 or above, classify as AUTHENTIC
-- If confidence is below 60, classify as DEEPFAKE
-- Be thorough and technical in your analysis`;
+RESPOND WITH EXACTLY THIS FORMAT:
+RESULT: [REAL or FAKE]  
+CONFIDENCE: [number 1-100]
+EXPLANATION: [brief explanation of key indicators found]`;
     
     // Update progress
     await supabase
@@ -148,56 +130,67 @@ IMPORTANT:
       throw new Error("Invalid response from AI analysis service");
     }
     
-    console.log('Raw analysis text:', analysisText);
+    console.log('Raw AI analysis:', analysisText);
     
-    // Parse the structured response
+    // Parse the AI response more robustly
+    const resultMatch = analysisText.match(/RESULT:\s*(REAL|FAKE)/i);
     const confidenceMatch = analysisText.match(/CONFIDENCE:\s*(\d+)/i);
-    const resultMatch = analysisText.match(/RESULT:\s*(AUTHENTIC|DEEPFAKE)/i);
-    const evidenceMatch = analysisText.match(/EVIDENCE:\s*(.*)/is);
+    const explanationMatch = analysisText.match(/EXPLANATION:\s*(.*?)(?=\n|$)/is);
     
-    const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
     const detectionResult = resultMatch ? resultMatch[1].toUpperCase() : 'UNKNOWN';
-    const evidence = evidenceMatch ? evidenceMatch[1].trim() : analysisText;
+    const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
+    const explanation = explanationMatch ? explanationMatch[1].trim() : analysisText;
     
-    const isDeepfake = detectionResult === 'DEEPFAKE';
+    // Determine if it's a deepfake - FAKE means deepfake
+    const isDeepfake = detectionResult === 'FAKE';
     
-    console.log(`Parsed results: confidence=${confidence}, result=${detectionResult}, isDeepfake=${isDeepfake}`);
+    console.log(`Analysis Results:
+    - Detection: ${detectionResult}
+    - Is Deepfake: ${isDeepfake}  
+    - Confidence: ${confidence}
+    - Explanation: ${explanation}`);
     
-    // Create a structured response
+    // Create structured analysis result
     const analysisResult = {
       fileName,
       fileType,
       timestamp: new Date().toISOString(),
       confidence,
       result: detectionResult,
-      isDeepfake,
-      evidence,
+      isDeepfake: isDeepfake,
+      explanation: explanation,
       rawAnalysis: analysisText,
       status: 'completed'
     };
 
-    console.log('Saving analysis result:', analysisResult);
+    console.log('Saving to database:', {
+      status: 'completed',
+      progress: 100,
+      is_deepfake: isDeepfake,
+      confidence: confidence,
+      analysis_result: analysisResult
+    });
 
-    // Update the queue item with results - FIXED: Ensure we're saving the correct values
+    // Update the queue item with results
     const { error: updateError } = await supabase
       .from('analysis_queue')
       .update({
         status: 'completed',
         progress: 100,
         completed_at: new Date().toISOString(),
-        is_deepfake: isDeepfake, // This should be true for deepfakes
+        is_deepfake: isDeepfake,
         confidence: confidence,
         analysis_result: analysisResult,
-        explanation: evidence
+        explanation: explanation
       })
       .eq('id', queueId);
 
     if (updateError) {
-      console.error('Error updating queue item:', updateError);
-      throw new Error('Failed to update analysis results');
+      console.error('Database update error:', updateError);
+      throw new Error('Failed to update analysis results in database');
     }
 
-    console.log('Analysis completed successfully and stored in database');
+    console.log('✅ Analysis completed and saved successfully');
 
     return new Response(JSON.stringify(analysisResult), {
       status: 200,
@@ -207,9 +200,9 @@ IMPORTANT:
       },
     });
   } catch (error: any) {
-    console.error("Error in analyze-deepfake function:", error);
+    console.error("❌ Error in analyze-deepfake function:", error);
     
-    // Try to update the queue item as failed if we have the queueId
+    // Try to update the queue item as failed
     try {
       const requestBody = await req.json().catch(() => ({}));
       if (requestBody.queueId) {
@@ -231,7 +224,6 @@ IMPORTANT:
       console.error('Failed to update queue item as failed:', updateError);
     }
     
-    // Return a proper error response
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred',

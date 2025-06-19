@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Clock, CheckCircle, XCircle, Loader2, FileText, Shield, AlertTriangle } from 'lucide-react';
@@ -132,31 +133,31 @@ const AnalysisQueue = () => {
       return null;
     }
 
-    console.log(`Item ${item.file_name}:`, {
+    console.log(`🔍 Checking detection for ${item.file_name}:`, {
       is_deepfake: item.is_deepfake,
       analysis_result: item.analysis_result
     });
 
-    // FIXED: Check multiple sources for the deepfake detection result with proper priority
     let isDeepfake = false;
     
-    // Priority 1: Check analysis_result.isDeepfake (this is where the edge function saves it)
+    // First check: analysis_result.isDeepfake (primary source)
     if (item.analysis_result && typeof item.analysis_result === 'object') {
       if ('isDeepfake' in item.analysis_result) {
         isDeepfake = item.analysis_result.isDeepfake === true;
-        console.log(`Using analysis_result.isDeepfake: ${isDeepfake}`);
-      } else if ('result' in item.analysis_result) {
-        // Priority 2: Check analysis_result.result
-        isDeepfake = item.analysis_result.result === 'DEEPFAKE';
-        console.log(`Using analysis_result.result: ${item.analysis_result.result} -> ${isDeepfake}`);
+        console.log(`✅ Using analysis_result.isDeepfake: ${isDeepfake}`);
+      } else if ('result' in item.analysis_result && item.analysis_result.result === 'FAKE') {
+        isDeepfake = true;
+        console.log(`✅ Using analysis_result.result=FAKE: ${isDeepfake}`);
       }
     }
     
-    // Priority 3: Fallback to is_deepfake column (but this should match now)
-    if (item.analysis_result === null || (!('isDeepfake' in (item.analysis_result || {})) && !('result' in (item.analysis_result || {})))) {
+    // Fallback to database column
+    if (item.analysis_result === null || item.analysis_result === undefined) {
       isDeepfake = item.is_deepfake === true;
-      console.log(`Fallback to is_deepfake column: ${isDeepfake}`);
+      console.log(`⚠️ Fallback to is_deepfake column: ${isDeepfake}`);
     }
+
+    console.log(`🎯 Final result for ${item.file_name}: ${isDeepfake ? 'DEEPFAKE' : 'AUTHENTIC'}`);
 
     return (
       <div className="flex items-center gap-2 mt-2">
