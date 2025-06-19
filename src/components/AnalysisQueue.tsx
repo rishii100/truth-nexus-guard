@@ -138,10 +138,10 @@ const AnalysisQueue = () => {
       analysis_result: item.analysis_result
     });
 
-    // Check multiple sources for the deepfake detection result
+    // FIXED: Check multiple sources for the deepfake detection result with proper priority
     let isDeepfake = false;
     
-    // Priority 1: Check analysis_result.isDeepfake
+    // Priority 1: Check analysis_result.isDeepfake (this is where the edge function saves it)
     if (item.analysis_result && typeof item.analysis_result === 'object') {
       if ('isDeepfake' in item.analysis_result) {
         isDeepfake = item.analysis_result.isDeepfake === true;
@@ -151,10 +151,12 @@ const AnalysisQueue = () => {
         isDeepfake = item.analysis_result.result === 'DEEPFAKE';
         console.log(`Using analysis_result.result: ${item.analysis_result.result} -> ${isDeepfake}`);
       }
-    } else {
-      // Priority 3: Fallback to is_deepfake column
+    }
+    
+    // Priority 3: Fallback to is_deepfake column (but this should match now)
+    if (item.analysis_result === null || (!('isDeepfake' in (item.analysis_result || {})) && !('result' in (item.analysis_result || {})))) {
       isDeepfake = item.is_deepfake === true;
-      console.log(`Using is_deepfake column: ${isDeepfake}`);
+      console.log(`Fallback to is_deepfake column: ${isDeepfake}`);
     }
 
     return (

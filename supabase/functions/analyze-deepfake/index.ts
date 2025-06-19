@@ -176,14 +176,16 @@ IMPORTANT:
       status: 'completed'
     };
 
-    // Update the queue item with results
+    console.log('Saving analysis result:', analysisResult);
+
+    // Update the queue item with results - FIXED: Ensure we're saving the correct values
     const { error: updateError } = await supabase
       .from('analysis_queue')
       .update({
         status: 'completed',
         progress: 100,
         completed_at: new Date().toISOString(),
-        is_deepfake: isDeepfake,
+        is_deepfake: isDeepfake, // This should be true for deepfakes
         confidence: confidence,
         analysis_result: analysisResult,
         explanation: evidence
@@ -208,9 +210,9 @@ IMPORTANT:
     console.error("Error in analyze-deepfake function:", error);
     
     // Try to update the queue item as failed if we have the queueId
-    const requestBody = await req.json().catch(() => ({}));
-    if (requestBody.queueId) {
-      try {
+    try {
+      const requestBody = await req.json().catch(() => ({}));
+      if (requestBody.queueId) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL");
         const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         
@@ -224,9 +226,9 @@ IMPORTANT:
             })
             .eq('id', requestBody.queueId);
         }
-      } catch (updateError) {
-        console.error('Failed to update queue item as failed:', updateError);
       }
+    } catch (updateError) {
+      console.error('Failed to update queue item as failed:', updateError);
     }
     
     // Return a proper error response
