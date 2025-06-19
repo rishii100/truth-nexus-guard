@@ -129,14 +129,28 @@ const AnalysisQueue = () => {
   };
 
   const getDetectionResult = (item: QueueItem) => {
-    if (item.status !== 'completed' || item.is_deepfake === null) {
+    if (item.status !== 'completed') {
       return null;
     }
 
-    console.log(`Item ${item.file_name}: is_deepfake=${item.is_deepfake}, confidence=${item.confidence}`); // Debug log
+    console.log(`Item ${item.file_name}: is_deepfake=${item.is_deepfake}, analysis_result:`, item.analysis_result); // Debug log
 
-    // Fix the logic - if is_deepfake is true, then it's a deepfake, otherwise it's authentic
-    const isDeepfake = item.is_deepfake === true;
+    // First check if we have analysis_result with isDeepfake property
+    let isDeepfake = false;
+    
+    if (item.analysis_result && typeof item.analysis_result === 'object') {
+      // Check if analysis_result has isDeepfake property
+      if ('isDeepfake' in item.analysis_result) {
+        isDeepfake = item.analysis_result.isDeepfake === true;
+        console.log(`Using analysis_result.isDeepfake: ${isDeepfake}`);
+      }
+    }
+    
+    // Fallback to is_deepfake column if analysis_result doesn't have the info
+    if (!item.analysis_result || !('isDeepfake' in item.analysis_result)) {
+      isDeepfake = item.is_deepfake === true;
+      console.log(`Using is_deepfake column: ${isDeepfake}`);
+    }
 
     return (
       <div className="flex items-center gap-2 mt-2">
