@@ -1,6 +1,8 @@
+
 import { Upload, FileVideo, FileImage, FileAudio, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../integrations/supabase/client";
+import { useAnalysisQueue } from "../hooks/useAnalysisQueue";
 
 interface FileUploadProps {
   onAnalysisComplete: (result: any) => void;
@@ -11,6 +13,7 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { addToQueue, updateQueueItem } = useAnalysisQueue();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -247,111 +250,145 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
     setIsAnalyzing(true);
     setError(null);
     
+    // Add to queue first
+    console.log('📝 Adding file to analysis queue:', uploadedFile.name);
+    const queueItem = await addToQueue(uploadedFile.name, uploadedFile.type);
+    
+    if (!queueItem) {
+      setError("Failed to add file to analysis queue");
+      setIsAnalyzing(false);
+      return;
+    }
+
+    console.log('✅ Added to queue with ID:', queueItem.id);
+    
     try {
+      // Update queue status to processing
+      await updateQueueItem(queueItem.id, { status: 'processing', progress: 25 });
+      
       console.log('Starting analysis for file:', uploadedFile.name);
+      
+      let analysisResult;
       
       // For images, do direct analysis
       if (uploadedFile.type.startsWith('image/')) {
         const imageUrl = URL.createObjectURL(uploadedFile);
         const img = new Image();
         
-        img.onload = async () => {
-          try {
-            const analysisResult = await analyzeImageDirectly(img);
-            
-            const transformedResult = {
-              fileName: uploadedFile.name,
-              fileType: uploadedFile.type,
-              timestamp: new Date().toISOString(),
-              confidence: analysisResult.confidence,
-              isDeepfake: analysisResult.isDeepfake,
-              processingTime: 1500, // Simulated processing time
-              analysis: analysisResult.analysis,
-              explanation: analysisResult.explanation
-            };
-            
-            onAnalysisComplete(transformedResult);
-            URL.revokeObjectURL(imageUrl);
-          } catch (err) {
-            console.error('Direct analysis error:', err);
-            setError('Failed to analyze image');
-          } finally {
-            setIsAnalyzing(false);
+        await new Promise((resolve, reject) => {
+          img.onload = async () => {
+            try {
+              await updateQueueItem(queueItem.id, { progress: 50 });
+              analysisResult = await analyzeImageDirectly(img);
+              await updateQueueItem(queueItem.id, { progress: 75 });
+              resolve(true);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          
+          img.onerror = () => {
+            reject(new Error('Failed to load image'));
+          };
+          
+          img.src = imageUrl;
+        });
+        
+        URL.revokeObjectURL(imageUrl);
+      } else {
+        // For videos and audio, fall back to AI analysis
+        await updateQueueItem(queueItem.id, { progress: 50 });
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              const base64String = reader.result.split(',')[1];
+              resolve(base64String);
+            } else {
+              reject(new Error('Failed to read file'));
+            }
+          };
+          reader.onerror = () => reject(new Error('File reading failed'));
+          reader.readAsDataURL(uploadedFile);
+        });
+        
+        console.log('File converted to base64, calling edge function...');
+        
+        await updateQueueItem(queueItem.id, { progress: 60 });
+        
+        // Call the edge function for non-image files
+        const { data, error: functionError } = await supabase.functions.invoke('analyze-deepfake', {
+          body: {
+            file: base64,
+            fileName: uploadedFile.name,
+            fileType: uploadedFile.type,
+            enhancedPrompt: true
           }
-        };
+        });
+
+        if (functionError) {
+          console.error('Edge function error:', functionError);
+          throw new Error(functionError.message || 'Analysis failed');
+        }
+
+        if (!data) {
+          throw new Error('No response from analysis service');
+        }
+
+        console.log('Analysis completed successfully:', data);
         
-        img.onerror = () => {
-          setError('Failed to load image');
-          setIsAnalyzing(false);
-          URL.revokeObjectURL(imageUrl);
-        };
+        // Simple parsing for video/audio
+        const analysisText = (data.analysis || '').toLowerCase();
+        const isDeepfake = analysisText.includes('fake') || analysisText.includes('artificial') || 
+                          analysisText.includes('deepfake') || analysisText.includes('synthetic');
+        const confidence = isDeepfake ? 35 : 75;
         
-        img.src = imageUrl;
-        return;
+        analysisResult = {
+          isDeepfake: isDeepfake,
+          confidence: confidence,
+          analysis: {
+            spatial: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
+            temporal: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
+            audio: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
+            metadata: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' }
+          },
+          explanation: data.analysis || 'Analysis completed successfully'
+        };
       }
       
-      // For videos and audio, fall back to AI analysis
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            const base64String = reader.result.split(',')[1];
-            resolve(base64String);
-          } else {
-            reject(new Error('Failed to read file'));
-          }
-        };
-        reader.onerror = () => reject(new Error('File reading failed'));
-        reader.readAsDataURL(uploadedFile);
-      });
+      await updateQueueItem(queueItem.id, { progress: 90 });
       
-      console.log('File converted to base64, calling edge function...');
-      
-      const startTime = Date.now();
-      
-      // Call the edge function for non-image files
-      const { data, error: functionError } = await supabase.functions.invoke('analyze-deepfake', {
-        body: {
-          file: base64,
+      // Update queue item with final results
+      await updateQueueItem(queueItem.id, {
+        status: 'completed',
+        progress: 100,
+        is_deepfake: analysisResult.isDeepfake,
+        confidence: analysisResult.confidence,
+        analysis_result: {
+          isDeepfake: analysisResult.isDeepfake,
+          result: analysisResult.isDeepfake ? 'FAKE' : 'REAL',
+          status: 'completed',
           fileName: uploadedFile.name,
           fileType: uploadedFile.type,
-          enhancedPrompt: true
-        }
+          timestamp: new Date().toISOString(),
+          confidence: analysisResult.confidence,
+          explanation: analysisResult.explanation,
+          rawAnalysis: analysisResult.explanation
+        },
+        explanation: analysisResult.explanation,
+        completed_at: new Date().toISOString()
       });
-
-      const processingTime = Date.now() - startTime;
-
-      if (functionError) {
-        console.error('Edge function error:', functionError);
-        throw new Error(functionError.message || 'Analysis failed');
-      }
-
-      if (!data) {
-        throw new Error('No response from analysis service');
-      }
-
-      console.log('Analysis completed successfully:', data);
-      
-      // Simple parsing for video/audio
-      const analysisText = (data.analysis || '').toLowerCase();
-      const isDeepfake = analysisText.includes('fake') || analysisText.includes('artificial') || 
-                        analysisText.includes('deepfake') || analysisText.includes('synthetic');
-      const confidence = isDeepfake ? 35 : 75;
       
       const transformedResult = {
-        fileName: data.fileName,
-        fileType: data.fileType,
-        timestamp: data.timestamp,
-        confidence: confidence,
-        isDeepfake: isDeepfake,
-        processingTime: processingTime,
-        analysis: {
-          spatial: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
-          temporal: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
-          audio: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' },
-          metadata: { score: confidence, status: isDeepfake ? 'suspicious' : 'authentic' }
-        },
-        explanation: data.analysis || 'Analysis completed successfully'
+        fileName: uploadedFile.name,
+        fileType: uploadedFile.type,
+        timestamp: new Date().toISOString(),
+        confidence: analysisResult.confidence,
+        isDeepfake: analysisResult.isDeepfake,
+        processingTime: 1500, // Simulated processing time
+        analysis: analysisResult.analysis,
+        explanation: analysisResult.explanation
       };
       
       onAnalysisComplete(transformedResult);
@@ -360,6 +397,13 @@ const FileUpload = ({ onAnalysisComplete }: FileUploadProps) => {
       console.error('Analysis error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Analysis failed';
       setError(errorMessage);
+      
+      // Update queue item with error status
+      await updateQueueItem(queueItem.id, {
+        status: 'failed',
+        progress: 100,
+        explanation: errorMessage
+      });
     } finally {
       setIsAnalyzing(false);
     }
