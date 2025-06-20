@@ -158,15 +158,6 @@ const AnalysisQueue = () => {
       console.log(`⚠️ Fallback to is_deepfake column: ${isDeepfake}`);
     }
 
-    // Strategy 4: Check explanation text as last resort
-    if (!isDeepfake && item.explanation) {
-      const explanationLower = item.explanation.toLowerCase();
-      if (explanationLower.includes('fake') || explanationLower.includes('deepfake') || explanationLower.includes('artificial')) {
-        isDeepfake = true;
-        console.log(`🔍 Detected deepfake from explanation text: ${isDeepfake}`);
-      }
-    }
-
     console.log(`🎯 FINAL DECISION for ${item.file_name}: ${isDeepfake ? 'DEEPFAKE' : 'AUTHENTIC'}`);
 
     return (
@@ -177,11 +168,6 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-red-700">
               Deepfake Detected
             </span>
-            {item.confidence && (
-              <span className="text-xs text-gray-500">
-                ({item.confidence}% confidence)
-              </span>
-            )}
           </>
         ) : (
           <>
@@ -189,18 +175,12 @@ const AnalysisQueue = () => {
             <span className="text-xs font-medium text-green-700">
               Authentic
             </span>
-            {item.confidence && (
-              <span className="text-xs text-gray-500">
-                ({item.confidence}% confidence)
-              </span>
-            )}
           </>
         )}
       </div>
     );
   };
 
-  // ... keep existing code (loading state and empty state)
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
