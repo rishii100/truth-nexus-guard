@@ -36,8 +36,8 @@ const ProjectOverview = () => {
   ];
 
   const stats = [
-    { label: "Detection Accuracy", value: ">95%" },
-    { label: "Processing Time", value: "<200ms" },
+    { label: "Detection Accuracy", value: ">85%" },
+    { label: "Processing Time", value: "<2000ms" },
     { label: "Supported Formats", value: "3+" }
     // "Languages Supported" removed
   ];
@@ -108,4 +108,3 @@ const ProjectOverview = () => {
 };
 
 export default ProjectOverview;
-
