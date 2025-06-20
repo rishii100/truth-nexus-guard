@@ -60,41 +60,36 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid or empty file data");
     }
     
-    // VERY STRICT prompt specifically for deepfake detection
-    const analysisPrompt = `You are an EXPERT deepfake detection AI. Analyze this ${fileType.startsWith('image') ? 'image' : fileType.startsWith('video') ? 'video' : 'audio'} VERY CAREFULLY for AI generation or deepfake manipulation.
+    // Enhanced prompt specifically for deepfake detection
+    const analysisPrompt = `You are an expert deepfake detection AI. Analyze this image VERY CAREFULLY for signs of AI generation or deepfake manipulation.
 
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-1. You MUST respond EXACTLY in this format:
+CRITICAL INSTRUCTIONS:
+1. You MUST respond with EXACTLY this format:
 RESULT: [REAL or FAKE]
 CONFIDENCE: [number from 1-100]
-EXPLANATION: [detailed analysis]
+EXPLANATION: [your detailed analysis]
 
-2. Mark as FAKE if you detect ANY of these AI generation signs:
-- Unrealistic skin (too smooth, plastic-like, no pores/texture)
-- Perfect/artificial teeth that look generated
-- Unnatural lighting that doesn't match the scene
+2. Mark as FAKE if you see ANY of these signs:
+- Unnatural skin texture (too smooth, plastic-like, no visible pores)
+- Perfect teeth that look artificially generated
+- Unnatural lighting or shadows that don't match
 - Digital artifacts around face/hair boundaries
-- Eyes with strange reflections or unnatural appearance
+- Eyes with strange reflections or misaligned pupils
 - Background inconsistencies or artificial blur
 - Face that looks "too perfect" or artificially enhanced
-- Any signs of digital manipulation
-- Synthetic or computer-generated appearance
-- Impossible facial features or proportions
-- Overly symmetric faces (real faces have natural asymmetry)
+- Any signs of digital manipulation or AI generation
 
-3. Mark as REAL only if you see:
-- Natural skin texture with visible pores/imperfections
-- Realistic lighting with proper shadows
-- Natural facial asymmetry and imperfections
+3. Mark as REAL only if:
+- Natural skin texture with visible imperfections/pores
+- Realistic lighting and shadows
+- Natural facial asymmetry
 - Realistic background interactions
 - Normal camera grain/noise patterns
-- Genuine human characteristics
+- Genuine human imperfections
 
-4. BE EXTREMELY STRICT - If there's ANY doubt about authenticity, mark as FAKE
-5. Modern AI can create very realistic images - look for subtle signs
-6. Pay special attention to skin texture, lighting consistency, and digital artifacts
+BE VERY STRICT - if there's ANY doubt, mark as FAKE.
 
-Analyze this ${fileType.startsWith('image') ? 'image' : 'media'} now and determine if it's AI-generated/deepfake:`;
+Analyze this image now:`;
     
     // Update progress
     await supabase
@@ -154,11 +149,11 @@ Analyze this ${fileType.startsWith('image') ? 'image' : 'media'} now and determi
     const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
     const explanation = explanationMatch ? explanationMatch[1].trim() : analysisText;
     
-    // DETERMINE if it's a deepfake - FAKE means deepfake detected
+    // CRITICAL: Determine if it's a deepfake - FAKE means deepfake
     const isDeepfake = detectionResult === 'FAKE';
     
     console.log(`🎯 PARSED RESULTS:
-    - Detection Result: ${detectionResult}
+    - Raw Detection: ${detectionResult}
     - Is Deepfake: ${isDeepfake}  
     - Confidence: ${confidence}
     - Explanation: ${explanation.substring(0, 100)}...`);
@@ -179,9 +174,10 @@ Analyze this ${fileType.startsWith('image') ? 'image' : 'media'} now and determi
     console.log(`💾 SAVING TO DATABASE:
     - Queue ID: ${queueId}
     - is_deepfake: ${isDeepfake}
-    - confidence: ${confidence}`);
+    - confidence: ${confidence}
+    - analysis_result: ${JSON.stringify(analysisResult, null, 2)}`);
 
-    // Update the queue item with results
+    // Update the queue item with results - CRITICAL DATABASE UPDATE
     const { data: updateData, error: updateError } = await supabase
       .from('analysis_queue')
       .update({
@@ -202,6 +198,24 @@ Analyze this ${fileType.startsWith('image') ? 'image' : 'media'} now and determi
     }
 
     console.log(`✅ DATABASE UPDATE SUCCESS:`, updateData);
+
+    // Verify the data was saved correctly
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('analysis_queue')
+      .select('*')
+      .eq('id', queueId)
+      .single();
+
+    if (verifyError) {
+      console.error('❌ VERIFICATION ERROR:', verifyError);
+    } else {
+      console.log(`🔍 VERIFICATION - Data in database:
+      - is_deepfake: ${verifyData.is_deepfake}
+      - confidence: ${verifyData.confidence}
+      - analysis_result exists: ${!!verifyData.analysis_result}
+      - analysis_result.isDeepfake: ${verifyData.analysis_result?.isDeepfake}`);
+    }
+
     console.log('✅ Analysis completed successfully');
 
     return new Response(JSON.stringify(analysisResult), {
