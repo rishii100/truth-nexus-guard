@@ -96,14 +96,14 @@ const Index = () => {
             <div>
               <h3 className="font-bold mb-4">Contact</h3>
               <div className="text-gray-400 text-sm space-y-2">
-                <p>Research & Development Team</p>
+                <p>Research & Development Team MUJ</p>
                 <p>deepfake@research.in</p>
                 <p>+91-XXX-XXX-XXXX</p>
               </div>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400 text-sm">
-            <p>&copy; 2024 AI-Driven Deepfake Detector. Built for digital integrity and trust.</p>
+            <p>&copy; 2025 AI-Driven Deepfake Detector. Built for digital integrity and trust.</p>
           </div>
         </div>
       </footer>
