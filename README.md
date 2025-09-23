@@ -86,8 +86,7 @@ Developed under the Safe & Trusted AI initiative, the system addresses the growi
 
 ## 🧑‍💻 Team
 
-- **Lead Institution:** Manipal University Jaipur  
-' - Chief Investigator:** Dr. Ankur pandey'
+- **Lead Institution:** Manipal University Jaipur
 - **Team Members:**  
   - Mr. Aneerban Saha(AI/ML)
   - Mr. Sameer Madhav D.(Blockchain)
