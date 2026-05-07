@@ -83,15 +83,3 @@ Developed under the Safe & Trusted AI initiative, the system addresses the growi
 - **Citizens:** Browser/mobile app to check content authenticity instantly
 
 ---
-
-## 🧑‍💻 Team
-
-- **Lead Institution:** Manipal University Jaipur
-- **Team Members:**  
-  - Mr. Aneerban Saha(AI/ML)
-  - Mr. Sameer Madhav D.(Blockchain)
-  - Mr. Dhruv Bansal(Cyber Security)
-  - Mr. Priyam Srivastava(Backend)
-    
-
-
